@@ -26,6 +26,7 @@ jobs:
       - name: Build GR8DVR.exe
         run: >
           pyinstaller --noconfirm --onefile --windowed --name GR8DVR --paths app
+          --icon app/gr8core/data/gr8dvr.ico
           --add-data "app/gr8core/data;gr8core/data"
           --add-data "app/gr8core/LICENSE-open-minidvr-50i.txt;."
           --add-binary "ffbin/ffmpeg.exe;." --add-binary "ffbin/ffprobe.exe;." --add-binary "ffbin/ffplay.exe;."

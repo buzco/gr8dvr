@@ -1386,6 +1386,13 @@ def main():
     root = tk.Tk()
     root.withdraw()
     w.init_fonts(root)
+    try:                                                   # window + taskbar icon
+        if os.name == 'nt':
+            root.iconbitmap(default=asset('gr8dvr.ico'))
+        root._icons = [tk.PhotoImage(file=asset(f'icon_{z}.png')) for z in (256, 48, 32, 16)]
+        root.iconphoto(True, *root._icons)
+    except tk.TclError:
+        pass
 
     def start():
         App(root)
