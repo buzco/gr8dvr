@@ -32,6 +32,12 @@ yy, xx = np.mgrid[0:H, 0:Wc].astype(np.float32)
 d = (xx * .62 - yy) / Wc
 g = np.exp(-((d - .05) / .035) ** 2) * .22 + np.exp(-((d - .13) / .012) ** 2) * .16
 c = 1 - (1 - c) * (1 - g[..., None] * np.array([.85, 1, .97]))
+if '--tint' in sys.argv:                                   # gradient-map to the GR8DVR palette: navy blacks, slate mids, mint gloss, beige print
+    stops = np.array([0, .18, .42, .66, .86, 1.0])
+    cols = np.array([(6, 10, 20), (24, 32, 48), (47, 61, 82), (96, 150, 140), (196, 214, 196), (239, 230, 208)]) / 255
+    Lc = np.clip(c @ np.array([.299, .587, .114]), 0, 1)
+    mapped = np.stack([np.interp(Lc, stops, cols[:, i]) for i in range(3)], -1)
+    c = mapped * .88 + c * .12
 out_im = Image.fromarray((np.clip(c, 0, 1) * 255).astype(np.uint8)).convert('RGBA')
 out_im.putalpha(alpha)
 out_im = out_im.resize((W, round(H * W / Wc)), Image.LANCZOS)
