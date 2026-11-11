@@ -1,0 +1,72 @@
+from . import VERSION
+
+SPLASH = (
+    f'Version {VERSION}  ·  Freeware  ·  © 2026 Buzco / GR8 Success. All rights reserved.\n'
+    'This software is provided "AS IS", without warranty of any kind. You use it, and any firmware it creates, '
+    'entirely at your own risk. Modifying device firmware may void your warranty and can permanently damage '
+    'your device. To the maximum extent permitted by law, Buzco is not liable for any damage, data loss or other harm.\n'
+    'Includes Eachine\'s original ProDVR firmware, unmodified, © Eachine / its manufacturer - all rights theirs. '
+    'Not affiliated with, endorsed or sponsored by Eachine, Sony or any device maker; all trademarks belong to '
+    'their owners. Also includes open-minidvr-50i (MIT) and FFmpeg (GPL). See Help ▸ License & notices.'
+)
+
+LICENSE = f"""GR8DVR {VERSION} - LICENSE AND NOTICES
+
+Copyright (c) 2026 Buzco / GR8 Success (gr8success.xyz). All rights reserved.
+
+1. FREEWARE
+GR8DVR is free of charge. You may use it for personal and commercial video work and share
+the unmodified installer for free. You may not sell it or bundle it with paid products.
+
+2. NO WARRANTY
+THE SOFTWARE AND ANY FIRMWARE FILE IT GENERATES ARE PROVIDED "AS IS", WITHOUT WARRANTY OF
+ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+
+3. YOUR RISK
+Writing firmware to a device is done entirely at your own risk. An interrupted or failed
+update, an incompatible device or a modified file can make a device permanently unusable.
+Always try the RAM test (Try First) before installing, keep the battery charged and USB
+power connected, and keep copies of your recordings. Modifying firmware may void the
+manufacturer's warranty.
+
+4. LIMITATION OF LIABILITY
+TO THE MAXIMUM EXTENT PERMITTED BY APPLICABLE LAW, IN NO EVENT SHALL BUZCO, GR8 SUCCESS OR
+THE CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, INCLUDING DAMAGE TO
+DEVICES, LOSS OF DATA, RECORDINGS OR PROFITS, WHETHER IN CONTRACT, TORT OR OTHERWISE,
+ARISING FROM OR IN CONNECTION WITH THE SOFTWARE OR ITS USE. Nothing in this notice limits
+rights you have under mandatory consumer law that cannot be excluded.
+
+5. MANUFACTURER FIRMWARE AND TRADEMARKS
+To make installation simple, GR8DVR includes an unmodified copy of Eachine's original
+ProDVR / HMDVR firmware update file (CRESFW.BIN, version 2015.05.26.01.IR, September 2016,
+SHA-256 a6134cc0...10df64), as published by Eachine for owners of the device. All rights in
+that firmware belong to Eachine and/or the original manufacturer. It is included solely so
+the Firmware Builder can apply GR8DVR's patches to it on your computer and so you can
+restore the original firmware at any time. No ownership of it is claimed and it is not
+sold. GR8DVR's own contribution is the patch data and this program.
+If you are the rights holder and object to this, contact us via gr8success.xyz and the
+firmware will be removed from future downloads.
+Eachine, Sony, Handycam and other names are trademarks of their respective owners. GR8DVR
+is an independent project and is not affiliated with, endorsed or sponsored by any of them.
+
+6. YOUR CONTENT
+Your videos never leave your computer. GR8DVR has no telemetry and does not upload anything.
+GR8DVR works fully offline.
+You are responsible for having the rights to any material you convert.
+
+7. CREDITS AND THIRD-PARTY SOFTWARE
+- Eachine - original ProDVR firmware (see section 5).
+- open-minidvr-50i by eonflux7 - MIT License. The firmware research GR8DVR builds on
+  (RAM boot, 50i field capture, SD update path) and weave.py. License file included.
+- FFmpeg - https://ffmpeg.org - licensed under the GNU GPL v3. FFmpeg is included as
+  separate executables; its source code is available at https://ffmpeg.org/download.html
+  and from Buzco on request.
+- NumPy - BSD 3-Clause License.
+- Python and Tkinter - Python Software Foundation License. Packaged with PyInstaller.
+- Texas Instruments TVP5150 datasheet - register documentation used for research.
+- Design, pixel art, sounds and fossil animation: Buzco / GR8 Success.
+
+8. CONTACT
+gr8success.xyz
+"""

@@ -1,0 +1,8 @@
+__pycache__/
+dist/
+build/
+*.spec
+*.AVI
+*.BIN
+ui_*.png
+!app/gr8core/data/vendor/*.BIN
