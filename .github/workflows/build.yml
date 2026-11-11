@@ -41,13 +41,13 @@ jobs:
         with: { name: GR8DVR-windows, path: dist/GR8DVR.exe }
 
   macos:
-    runs-on: macos-latest                  # Apple Silicon runner; Intel is built under Rosetta with an x64 Python
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - { arch: arm64, py: arm64, label: AppleSilicon }
-          - { arch: amd64, py: x64,   label: Intel }
+          - { runner: macos-latest,    arch: arm64, py: arm64, mach: arm64,  label: AppleSilicon }
+          - { runner: macos-15-intel,  arch: amd64, py: x64,   mach: x86_64, label: Intel }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -80,9 +80,12 @@ jobs:
           --add-binary "ffbin/ffmpeg:." --add-binary "ffbin/ffprobe:." --add-binary "ffbin/ffplay:."
           --add-data "ffbin/FFMPEG-LICENSE.txt:." --add-data "NOTICES.txt:."
           app/gr8dvr.py
+      - name: Check the app is built for ${{ matrix.mach }}
+        run: |
+          file dist/GR8DVR.app/Contents/MacOS/GR8DVR | tee /dev/stderr | grep -q "${{ matrix.mach }}"
+          file ffbin/ffmpeg | grep -q "${{ matrix.mach }}"
       - name: Zip the app
         run: |
-          file dist/GR8DVR.app/Contents/MacOS/GR8DVR
           ditto -c -k --sequesterRsrc --keepParent dist/GR8DVR.app GR8DVR-macOS-${{ matrix.label }}.zip
       - uses: actions/upload-artifact@v4
         with:
