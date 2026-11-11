@@ -51,10 +51,47 @@ for y in range(GH):
         else:
             col = BODY[sum(l > e for e in edges)]
         outp[y, x] = (*col, 255)
+# ---- Y2K finish: blue-black gloss plastic, mint rim light, embossed chrome print
+if '--y2k' in sys.argv:
+    BODY2 = [(9, 12, 20), (16, 22, 34), (25, 33, 50), (37, 48, 70), (54, 68, 96), (78, 96, 128)]
+    rgb = outp[..., :3].astype(int); on = outp[..., 3] > 0
+    tone = {c: i for i, c in enumerate(BODY)}
+    ink = np.all(rgb == INK, -1) & on
+    for y in range(GH):
+        for x in range(GW):
+            if not on[y, x]:
+                continue
+            c = tuple(rgb[y, x])
+            if c in tone:
+                i = tone[c]
+                d = (x * 0.55 - y) / GW                      # diagonal gloss sweep across the body
+                if 0.05 < d < 0.16 or (0.03 < d < 0.05 and (x + y) % 2) or (0.16 < d < 0.19 and (x + y) % 2):
+                    i = min(i + 1, 5)
+                outp[y, x, :3] = BODY2[i]
+            elif c == INK:
+                below = y + 1 < GH and on[y + 1, x] and not ink[y + 1, x]
+                above = y > 0 and on[y - 1, x] and not ink[y - 1, x]
+                outp[y, x, :3] = (150, 172, 184) if below else (255, 255, 255) if above else (226, 238, 242)
+            elif c == METAL:
+                outp[y, x, :3] = (214, 232, 236) if (x + y) % 3 else (125, 255, 212)
+            elif c == METAL_D:
+                outp[y, x, :3] = (104, 122, 138)
+    on = outp[..., 3] > 0
+    for y in range(1, GH):                                    # mint rim light on every top-facing edge
+        for x in range(GW):
+            if on[y, x] and not on[y - 1, x] and not ink[y, x]:
+                outp[y, x, :3] = (125, 255, 212)
+                if y + 1 < GH and on[y + 1, x] and not ink[y + 1, x] and x % 2 == 0:
+                    outp[y + 1, x, :3] = (40, 140, 112)
+    for y in range(GH):                                       # cool blue rim on the left-facing edges
+        for x in range(1, GW):
+            if on[y, x] and not on[y, x - 1] and on[y - 1, x] if y else False:
+                if not ink[y, x] and tuple(outp[y, x, :3]) != (125, 255, 212):
+                    outp[y, x, :3] = (90, 120, 170)
 # 1px outline
 alpha = outp[..., 3] > 0
 ring = ndi.binary_dilation(alpha) & ~alpha
-outp[ring] = (10, 11, 14, 255)
+outp[ring] = (4, 18, 14, 255) if '--y2k' in sys.argv else (10, 11, 14, 255)
 res = Image.fromarray(outp, 'RGBA')
 res.resize((GW * SC, GH * SC), Image.NEAREST).save(out, optimize=True)
 print(out, res.size, '->', (GW * SC, GH * SC))
