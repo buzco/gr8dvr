@@ -2,6 +2,7 @@ name: build-windows
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     tags: ['v*']
 permissions:
   contents: write
@@ -38,7 +39,21 @@ jobs:
         run: ffbin\ffmpeg.exe -hide_banner -encoders | findstr libx264
       - uses: actions/upload-artifact@v4
         with: { name: GR8DVR-windows, path: dist/GR8DVR.exe }
+      - name: Version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = (Select-String -Path app/gr8core/__init__.py -Pattern "VERSION\s*=\s*'([^']+)'").Matches[0].Groups[1].Value
+          "v=$v" >> $env:GITHUB_OUTPUT
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
-        with: { files: dist/GR8DVR.exe }
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          name: GR8DVR ${{ steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          body: |
+            GR8DVR ${{ steps.ver.outputs.v }} - free firmware builder + MiniDV / Mini DVR media toolkit for Windows 10/11.
+            Download GR8DVR.exe below (Windows may warn "unrecognised app": More info -> Run anyway).
+            Install guide, FAQ and credits: https://gr8success.xyz/pages/gr8dvr
+          files: dist/GR8DVR.exe
