@@ -41,7 +41,7 @@ jobs:
         with: { name: GR8DVR-windows, path: dist/GR8DVR.exe }
 
   macos:
-    runs-on: macos-14                      # Apple Silicon runner; Intel is built under Rosetta with an x64 Python
+    runs-on: macos-latest                  # Apple Silicon runner; Intel is built under Rosetta with an x64 Python
     strategy:
       fail-fast: false
       matrix:
