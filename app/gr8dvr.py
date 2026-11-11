@@ -1,9 +1,8 @@
-"""GR8DVR - MiniDV / Mini DVR toolkit by Buzco (Windows 95 style UI)."""
+"""GR8DVR - MiniDV / Mini DVR toolkit by Buzco (Windows 95 style UI, runs on Windows and macOS)."""
 import datetime
 import os
 import queue
 import shutil
-import string
 import subprocess
 import sys
 import threading
@@ -37,15 +36,12 @@ def hms(s):
 
 
 def guess_cards():
-    """Removable drives that look like a DVR card (Windows), else []."""
-    if os.name != 'nt':
-        return []
+    """Removable drives that look like a DVR card (Windows drive letters, macOS /Volumes, Linux /media)."""
     out = []
-    for d in string.ascii_uppercase[3:]:
-        root = f'{d}:\\'
+    for root, _ in library.drives():
         try:
-            if os.path.isdir(root) and (os.path.isdir(root + 'DCIM') or any(
-                    n.upper().endswith(('.AVI', '.BIN')) for n in os.listdir(root))):
+            if os.path.isdir(os.path.join(root, 'DCIM')) or any(
+                    n.upper().endswith(('.AVI', '.BIN')) for n in os.listdir(root)):
                 out.append(root)
         except OSError:
             pass
@@ -342,8 +338,10 @@ class App:
 def open_folder(path):
     if os.name == 'nt':
         os.startfile(path)                               # noqa: S606
+    elif sys.platform == 'darwin':
+        subprocess.Popen(['open', path])
     else:
-        webbrowser.open('file://' + path)
+        subprocess.Popen(['xdg-open', path])
 
 
 # ---------------------------------------------------------------- clip tabs (Media Converter + Mini DVR Import)
@@ -1245,7 +1243,7 @@ class FirmwareTab:
         r.pack(fill='x')
         w.Field(r, self.card, width=50).pack(side='left', fill='x', expand=True)
         w.Button(r, 'Browse…', self.pick_card).pack(side='left', padx=6)
-        w.Help(r, 'Pick the card\'s top folder (for example E:\\). Old GR8DVR / ADJUST.BIN / CRESFW.BIN files on '
+        w.Help(r, 'Pick the card\'s top folder (for example E:\\ on Windows, /Volumes/NO NAME on a Mac). Old GR8DVR / ADJUST.BIN / CRESFW.BIN files on '
                   'it are replaced. FAT32 cards up to 32 GB work best.').pack(side='left')
         if cards:
             tk.Label(self.body, text='Found: ' + ', '.join(cards), fg=DIM, anchor='w').pack(fill='x', pady=6)

@@ -5,9 +5,15 @@ import hashlib
 import json
 import os
 import string
+import sys
 
 
-APPDIR = os.path.join(os.environ.get('APPDATA') or os.path.expanduser('~/.config'), 'GR8DVR')
+if os.name == 'nt':
+    APPDIR = os.path.join(os.environ.get('APPDATA') or os.path.expanduser('~'), 'GR8DVR')
+elif sys.platform == 'darwin':
+    APPDIR = os.path.expanduser('~/Library/Application Support/GR8DVR')
+else:
+    APPDIR = os.path.join(os.environ.get('XDG_CONFIG_HOME') or os.path.expanduser('~/.config'), 'GR8DVR')
 SETTINGS = os.path.join(APPDIR, 'settings.json')
 LEDGER = os.path.join(APPDIR, 'imported.json')
 
@@ -42,7 +48,7 @@ def drives():
     """[(root, removable)] - removable cards first."""
     if os.name != 'nt':
         roots = [p for p in glob.glob('/media/*/*') + glob.glob('/run/media/*/*') + glob.glob('/Volumes/*')
-                 if os.path.isdir(p)]
+                 if os.path.isdir(p) and os.path.realpath(p) != '/']      # macOS: skip the startup disk alias
         return [(r, True) for r in roots]
     import ctypes
     out = []
@@ -165,7 +171,7 @@ def dated_dir(base):
 
 
 def default_base(sub):
-    v = os.path.join(os.path.expanduser('~'), 'Videos')
+    v = os.path.join(os.path.expanduser('~'), 'Movies' if sys.platform == 'darwin' else 'Videos')
     return os.path.join(v if os.path.isdir(v) else os.path.expanduser('~'), 'GR8DVR', sub)
 
 

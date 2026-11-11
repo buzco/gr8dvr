@@ -55,9 +55,10 @@ def build(vendor_bytes, preset=None, fps=None):
 
 def _clean_card(card):
     for n in ('ADJUST.BIN', 'CRESFW.BIN', 'UPOKE.BIN'):
-        p = os.path.join(card, n)
-        if os.path.exists(p):
-            os.remove(p)
+        for name in (n, '._' + n):                       # '._' = macOS AppleDouble twin on FAT cards
+            p = os.path.join(card, name)
+            if os.path.exists(p):
+                os.remove(p)
 
 
 def write(card, vendor_path, mode, preset=None, fps=None):

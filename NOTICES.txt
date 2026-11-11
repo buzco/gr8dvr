@@ -47,7 +47,8 @@ You are responsible for having the rights to any material you convert.
 - Eachine - original ProDVR firmware (see section 5).
 - open-minidvr-50i by eonflux7 - MIT License. The firmware research GR8DVR builds on
   (RAM boot, 50i field capture, SD update path) and weave.py. License file included.
-- FFmpeg - https://ffmpeg.org - licensed under the GNU GPL v3. FFmpeg is included as
+- FFmpeg - https://ffmpeg.org - licensed under the GNU GPL v3 (Windows: BtbN build; macOS:
+  static build from ffmpeg.martin-riedl.de). FFmpeg is included as
   separate executables; its source code is available at https://ffmpeg.org/download.html
   and from Buzco on request.
 - NumPy - BSD 3-Clause License.
