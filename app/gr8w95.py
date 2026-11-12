@@ -509,11 +509,13 @@ def _hex(rgb):
 
 
 class Helix(Backdrop):
-    """Data conversion as a beam of light leaving the camcorder and opening into the visible spectrum
-    (violet -> red) on its way to the nautilus; the spectrum grows left to right with the progress.
-    states: idle (faint, breathing), scan (a pulse of light runs along), busy (spectrum grows with progress,
-    white flare at the tip), ok (full bright spectrum + sparkles), error (dims to red and shudders)"""
-    BG = (4, 16, 74)                                         # blend target (the panel's mid blue)
+    """Data conversion as a soft rainbow beam: white light leaves the camcorder lens and fans out into the
+    spectrum (red on top, violet below) like light through a prism, reaching for the nautilus. The beam
+    grows left to right with the progress.
+    states: idle (faint, breathing), scan (a glint travels along), busy (beam grows with progress),
+    ok (full beam flares white, sparkles), error (dims to a flickering red)"""
+    BANDS = 16                                               # colour bands across the beam
+    SEGS = 32                                                # segments along it
 
     def __init__(self, parent, cam_png, store_png, height=104, **kw):
         super().__init__(parent, floor=False, stars=1.4, seed=3, height=height, **kw)
@@ -522,6 +524,8 @@ class Helix(Backdrop):
         self.state, self.t, self.until = 'idle', 0, 0
         self.progress, self.shown = 0.0, 0.0
         self.sparks = []
+        self.BG = (4, 30, 120)
+        self.cols = [_wave_rgb(680 - 290 * (i + .5) / self.BANDS) for i in range(self.BANDS)]   # red -> violet
         self._anim()
 
     def set_state(self, s, hold=0):
@@ -532,10 +536,18 @@ class Helix(Backdrop):
             self.sparks = [(random.uniform(-46, 40), random.uniform(-42, 36), random.randrange(4, 22))
                            for _ in range(16)]
 
-    def _col(self, rgb, k, white=0.0):
-        """rgb 0..1 at brightness k (0 = panel blue, 1 = full), optionally pushed toward white."""
+    def _mix(self, rgb, k, white=0.0):
         r, g, b = (c + (1 - c) * white for c in rgb)
         return _hex([bg + (c * 255 - bg) * k for c, bg in zip((r, g, b), self.BG)])
+
+    def _bg_at(self, f_y):
+        from gr8core import scene
+        st_ = scene.STOPS
+        for (a0, c0), (a1, c1) in zip(st_, st_[1:]):
+            if a0 <= f_y <= a1:
+                u = (f_y - a0) / (a1 - a0)
+                return tuple(c0[i] + (c1[i] - c0[i]) * u for i in range(3))
+        return st_[-1][1]
 
     def _anim(self):
         import math
@@ -550,67 +562,64 @@ class Helix(Backdrop):
         W = max(self.winfo_width(), 200)
         H = max(self.winfo_height(), int(self.winfo_fpixels(self['height'])))
         cy = H // 2 + 2
-        from gr8core import scene                                 # blend toward the backdrop colour at the beam
-        f_y = cy / H
-        st_ = scene.STOPS
-        for (a0, c0), (a1, c1) in zip(st_, st_[1:]):
-            if a0 <= f_y <= a1:
-                u = (f_y - a0) / (a1 - a0)
-                self.BG = tuple(c0[i] + (c1[i] - c0[i]) * u for i in range(3))
-                break
+        self.BG = self._bg_at(cy / H)
         cw, sw = self.cam.width(), self.store.width()
-        x0, x1 = cw + 10, W - sw - 6
+        x0, x1 = cw + 4, W - sw + 2
         span = max(1, x1 - x0)
-        shake = math.sin(self.t * 2.3) * 3 if st == 'error' else 0
+        shake = math.sin(self.t * 2.3) * 2 if st == 'error' else 0
         self.create_image(4, cy, image=self.cam, anchor='w', tags='dna')
-        # how much of the spectrum is lit
-        if st == 'busy':
-            target = self.progress
-        elif st == 'ok':
-            target = 1.0
-        else:
-            target = 0.0
-        self.shown += (target - self.shown) * 0.18
+        target = {'busy': self.progress, 'ok': 1.0}.get(st, 1.0 if st in ('idle', 'scan', 'error') else 0.0)
+        if st == 'busy' and self.shown > self.progress + 0.02:              # a new job starts from the lens
+            self.shown = 0.0
+        self.shown += (target - self.shown) * (0.12 if st == 'busy' else 0.25)
         head = x0 + span * self.shown
-        breathe = 0.5 + 0.5 * math.sin(self.t / 9)
-        pulse_x = x0 + (self.t * 6) % (span + 60) - 30                  # travelling light for scan / waiting
-        for x in range(x0, x1, 2):
-            f = (x - x0) / span
-            rgb = _wave_rgb(380 + 320 * f)
-            if st == 'error':
-                rgb = (0.95, 0.22 + 0.1 * math.sin(x / 7 + self.t), 0.16)
-            spread = 0.35 + 0.65 * min(1.0, f * 3)                       # thin at the lens, opens like a prism fan
-            wave = math.sin(x / 9 - self.t / 3) * 0.5 + math.sin(x / 23 + self.t / 5) * 0.5
-            hb = (4 + 9 * spread) * (1 + 0.18 * wave)
-            lit = x <= head or st == 'error'
-            if lit:
-                k = 1.0 if st != 'idle' else 0.55
-                if st == 'ok' and self.until - self.t > 50:
-                    k, white = 1.0, 0.55
-                else:
-                    white = 0.0
-            else:
-                k, white = (0.16 + 0.10 * breathe) if st in ('idle', 'busy') else 0.14, 0.0
-                if st in ('scan', 'busy') and abs(x - pulse_x) < 26:
-                    k = max(k, 0.85 * (1 - abs(x - pulse_x) / 26))
-                    white = 0.3
+        base = {'idle': 0.32 + 0.1 * math.sin(self.t / 14), 'scan': 0.38, 'busy': 1.0, 'ok': 1.0,
+                'error': 0.75}.get(st, 0.4)
+        flash = max(0.0, (self.until - self.t - 40) / 30) if st == 'ok' else 0.0
+        glint = x0 + ((self.t * 7) % int(span + 80)) - 40
+        y_lens = cy - 6                                                   # the lens sits a little above centre
+        for j in range(self.SEGS):
+            fa, fb = j / self.SEGS, (j + 1) / self.SEGS
+            xa, xb = x0 + span * fa, x0 + span * fb
+            if xa >= head:
+                break
+            xb = min(xb, head)
+            fb = (xb - x0) / span
+            # beam geometry: a narrow white ray that opens into a fan
+            def edges(f):
+                half = 1.5 + 15 * min(1.0, f * 1.6) ** 0.8
+                yc = y_lens + (cy + 2 - y_lens) * min(1.0, f * 2)
+                return yc - half, yc + half
+            ta, ba = edges(fa); tb, bb = edges(fb)
+            white = max(0.0, 1 - fa * 3.2) * 0.85                         # white near the lens, rainbow later
+            shimmer = 0.88 + 0.12 * math.sin(self.t / 5 - j * 0.7)
+            k_seg = base * shimmer
+            if st in ('idle', 'scan') and abs((xa + xb) / 2 - glint) < 34:
+                k_seg = min(1.0, k_seg + 0.55 * (1 - abs((xa + xb) / 2 - glint) / 34))
+            tip = (head - xa) / max(1.0, xb - xa)
+            if st == 'busy' and xb >= head - 1:
+                k_seg *= 0.75                                             # soft leading edge
             if st == 'error' and (self.t // 3) % 2:
-                k *= 0.5
-            y = cy + shake + math.sin(x / 15 - self.t / 4) * 2 * spread
-            self.create_line(x, y - hb * 1.7, x, y + hb * 1.7, fill=self._col(rgb, k * 0.35), width=2, tags='dna')
-            self.create_line(x, y - hb, x, y + hb, fill=self._col(rgb, k, white), width=2, tags='dna')
-            self.create_line(x, y - 1, x, y + 1, fill=self._col(rgb, k, min(1, white + 0.6)), width=2, tags='dna')
-        # the source glow at the lens, and the flare at the growing tip
-        lens = (x0 - 4, cy + shake)
-        for r, k in ((7, .25), (4, .6), (2, 1)):
-            self.create_oval(lens[0] - r, lens[1] - r, lens[0] + r, lens[1] + r, fill=self._col((1, 1, 1), k),
-                             outline='', tags='dna')
-        if st == 'busy' and x0 < head < x1 - 2:
-            hx, hy = head, cy + math.sin(head / 15 - self.t / 4) * 2
-            L = 9 + 4 * math.sin(self.t / 2)
-            self.create_line(hx - L, hy, hx + L, hy, fill='#ffffff', tags='dna')
-            self.create_line(hx, hy - L, hx, hy + L, fill='#ffffff', tags='dna')
-            self.create_oval(hx - 3, hy - 3, hx + 3, hy + 3, fill='#ffffff', outline='', tags='dna')
+                k_seg *= 0.55
+            for i, rgb in enumerate(self.cols):
+                if st == 'error':
+                    rgb = (0.95, 0.22, 0.18)
+                u0, u1 = i / self.BANDS, (i + 1) / self.BANDS
+                edge = math.sin(math.pi * (u0 + u1) / 2) ** 0.7             # soft top/bottom edges
+                col = self._mix(rgb, k_seg * edge, min(1.0, white + flash * 0.7))
+                y0a, y1a = ta + (ba - ta) * u0 + shake, ta + (ba - ta) * u1 + shake
+                y0b, y1b = tb + (bb - tb) * u0 + shake, tb + (bb - tb) * u1 + shake
+                self.create_polygon(xa, y0a, xb, y0b, xb, y1b + .6, xa, y1a + .6, fill=col, outline='', tags='dna')
+        # lens glow
+        for r, k in ((9, .22), (5, .55), (2.5, 1)):
+            self.create_oval(x0 - r, y_lens - r, x0 + r, y_lens + r, fill=self._mix((1, 1, 1), k), outline='',
+                             tags='dna')
+        if st == 'busy' and x0 + 4 < head < x1 - 2:                       # a soft star at the growing tip
+            hy = y_lens + (cy + 2 - y_lens) * min(1.0, self.shown * 2) + shake
+            L = 7 + 3 * math.sin(self.t / 2)
+            self.create_line(head - L, hy, head + L, hy, fill=self._mix((1, 1, 1), .9), tags='dna')
+            self.create_line(head, hy - L, head, hy + L, fill=self._mix((1, 1, 1), .9), tags='dna')
+            self.create_oval(head - 2, hy - 2, head + 2, hy + 2, fill='#ffffff', outline='', tags='dna')
         sx = W - sw - 4
         self.create_image(sx, cy, image=self.store, anchor='w', tags='dna')
         if st == 'ok':

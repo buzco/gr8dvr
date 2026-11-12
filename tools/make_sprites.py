@@ -44,6 +44,31 @@ def cut_grabcut(path, rect):
     return rgba.crop(rgba.getbbox())
 
 
+# hand-traced outline of the camcorder photo (535 x 373): seeds GrabCut so no studio backdrop/floor survives
+CAM_OUTLINE = [(44, 156), (60, 150), (100, 148), (148, 149), (152, 140), (155, 130), (175, 126), (207, 125), (212, 132),
+               (240, 124), (262, 118), (283, 112), (290, 108), (305, 104), (320, 90), (350, 55), (360, 32), (375, 26),
+               (400, 30), (418, 40), (425, 52), (420, 68), (400, 76), (380, 104), (388, 108), (395, 118), (398, 132),
+               (400, 140), (410, 142), (414, 150), (414, 176), (408, 184), (488, 185), (489, 250), (492, 256),
+               (487, 262), (485, 320), (470, 325), (300, 325), (290, 322), (240, 321), (205, 318), (170, 312),
+               (155, 302), (148, 300), (120, 302), (70, 285), (55, 275), (48, 250), (42, 200), (42, 170)]
+
+
+def cut_outline(path, outline):
+    from PIL import ImageDraw
+    bgr = cv2.imread(path); h, w = bgr.shape[:2]
+    poly = Image.new('L', (w, h), 0); ImageDraw.Draw(poly).polygon(outline, fill=1)
+    poly = np.asarray(poly).astype(bool)
+    mask = np.full((h, w), cv2.GC_BGD, np.uint8)
+    mask[ndi.binary_dilation(poly, iterations=5)] = cv2.GC_PR_BGD
+    mask[poly] = cv2.GC_PR_FGD
+    mask[ndi.binary_erosion(poly, iterations=7)] = cv2.GC_FGD
+    b, f = np.zeros((1, 65)), np.zeros((1, 65))
+    cv2.grabCut(bgr, mask, None, b, f, 8, cv2.GC_INIT_WITH_MASK)
+    m = ndi.binary_fill_holes(biggest((mask == 1) | (mask == 3)))
+    rgba = Image.open(path).convert('RGBA'); rgba.putalpha(Image.fromarray((m * 255).astype(np.uint8)))
+    return rgba.crop(rgba.getbbox())
+
+
 def pixelize(rgba, grid_w, colors, scale, sat=1.12, contrast=1.06, sharpen=80):
     """Downsample to a pixel grid (alpha-aware), crisp it up, quantise to a small palette, add a 1px outline."""
     from PIL import ImageEnhance
@@ -65,7 +90,7 @@ def pixelize(rgba, grid_w, colors, scale, sat=1.12, contrast=1.06, sharpen=80):
 def main():
     naut = cut_dark_bg(os.path.join(ART, 'nautilus-photo.jpg'))
     naut.save('/tmp/_naut_cut.png')
-    cam = cut_grabcut(os.path.join(ART, 'camcorder-photo.jpg'), (30, 8, 490, 352))
+    cam = cut_outline(os.path.join(ART, 'camcorder-photo.jpg'), CAM_OUTLINE)
     cam.save('/tmp/_cam_cut.png')
     pixelize(naut, 56, 24, 2).save(os.path.join(D, 'nautilus_px.png'))
     pixelize(cam, 56, 20, 2, sat=1.0).save(os.path.join(D, 'camcorder_px.png'))
