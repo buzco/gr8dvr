@@ -349,8 +349,8 @@ class ClipTab:
         top.pack(fill='x')
         hb = w.Bevel(top, 'sunken', bg=DK)
         hb.pack(side='left')
-        self.helix = w.Helix(hb.inner, asset('camcorder.png'), asset('nautilus_real.png'),
-                             width=430, height=94)
+        self.helix = w.Helix(hb.inner, asset('camcorder_px.png'), asset('nautilus_px.png'),
+                             width=480, height=94)
         self.helix.pack()
         hd = tk.Frame(top)
         hd.pack(side='left', fill='both', expand=True, padx=(12, 0))

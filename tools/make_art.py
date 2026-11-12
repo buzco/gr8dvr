@@ -124,5 +124,5 @@ def nautilus_assets():
 
 
 if __name__ == '__main__':
-    splash(); about(); oy = sidebar(); nautilus_assets()
+    splash(); about(); oy = sidebar()        # sprites (nautilus, camcorder, sidebar icon): make_sprites.py
     print('art written; sidebar image offset', oy)

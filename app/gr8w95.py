@@ -486,21 +486,41 @@ class Backdrop(tk.Canvas):
         pass
 
 
+def _wave_rgb(nm):
+    """Visible wavelength (380-700 nm) -> (r, g, b) 0..1, with the usual edge fall-off."""
+    if nm < 440:
+        r, g, b = -(nm - 440) / 60, 0.0, 1.0
+    elif nm < 490:
+        r, g, b = 0.0, (nm - 440) / 50, 1.0
+    elif nm < 510:
+        r, g, b = 0.0, 1.0, -(nm - 510) / 20
+    elif nm < 580:
+        r, g, b = (nm - 510) / 70, 1.0, 0.0
+    elif nm < 645:
+        r, g, b = 1.0, -(nm - 645) / 65, 0.0
+    else:
+        r, g, b = 1.0, 0.0, 0.0
+    f = 0.35 + 0.65 * (nm - 380) / 40 if nm < 420 else 0.35 + 0.65 * (700 - nm) / 50 if nm > 650 else 1.0
+    return tuple(max(0.0, c * f) ** 0.8 for c in (r, g, b))
+
+
+def _hex(rgb):
+    return '#%02x%02x%02x' % tuple(max(0, min(255, int(c))) for c in rgb)
+
+
 class Helix(Backdrop):
-    """Data conversion as a DNA double helix flowing from a camcorder into a nautilus.
-    states: idle (slow spin), scan (gentle flow), busy (fast flow + REC lamp), ok (white flash, sparkles), error (red shake)"""
-    # base pairs from the key art: pearl-cobalt, cobalt-pearl, lavender-nautilus rust, rust-lavender
-    BASES = [('#f0ede6', '#5b8cf0'), ('#5b8cf0', '#f0ede6'), ('#a9b2ec', '#c95a3c'), ('#c95a3c', '#a9b2ec')]
-    STRANDS = ('#fbfaff', '#8fb4ff')
+    """Data conversion as a beam of light leaving the camcorder and opening into the visible spectrum
+    (violet -> red) on its way to the nautilus; the spectrum grows left to right with the progress.
+    states: idle (faint, breathing), scan (a pulse of light runs along), busy (spectrum grows with progress,
+    white flare at the tip), ok (full bright spectrum + sparkles), error (dims to red and shudders)"""
+    BG = (4, 16, 74)                                         # blend target (the panel's mid blue)
 
     def __init__(self, parent, cam_png, store_png, height=104, **kw):
         super().__init__(parent, floor=False, stars=1.4, seed=3, height=height, **kw)
-        import random
         self.cam = tk.PhotoImage(file=cam_png)
         self.store = tk.PhotoImage(file=store_png)
-        self.seq = [random.randrange(4) for _ in range(400)]
-        self.state, self.phase, self.flow, self.t, self.until = 'idle', 0.0, 0.0, 0, 0
-        self.progress = 0.0
+        self.state, self.t, self.until = 'idle', 0, 0
+        self.progress, self.shown = 0.0, 0.0
         self.sparks = []
         self._anim()
 
@@ -509,8 +529,13 @@ class Helix(Backdrop):
         self.until = self.t + hold
         if s == 'ok':
             import random
-            self.sparks = [(random.uniform(-40, 40), random.uniform(-40, 30), random.randrange(4, 22))
-                           for _ in range(14)]
+            self.sparks = [(random.uniform(-46, 40), random.uniform(-42, 36), random.randrange(4, 22))
+                           for _ in range(16)]
+
+    def _col(self, rgb, k, white=0.0):
+        """rgb 0..1 at brightness k (0 = panel blue, 1 = full), optionally pushed toward white."""
+        r, g, b = (c + (1 - c) * white for c in rgb)
+        return _hex([bg + (c * 255 - bg) * k for c, bg in zip((r, g, b), self.BG)])
 
     def _anim(self):
         import math
@@ -518,71 +543,83 @@ class Helix(Backdrop):
         if self.until and self.t >= self.until and self.state in ('ok', 'error'):
             self.state, self.until = 'idle', 0
         st = self.state
-        self.phase += {'idle': 0.05, 'scan': 0.09, 'busy': 0.2}.get(st, 0.12)
-        self.flow += {'scan': 1.0, 'busy': 3.5}.get(st, 0.0)
+        self.after(40, self._anim)
+        if not self.winfo_ismapped() and self.t > 2:
+            return
         self.delete('dna')
         W = max(self.winfo_width(), 200)
-        H = max(self.winfo_height(), int(self['height']))
-        if not self.winfo_ismapped() and self.t > 2:
-            self.after(200, self._anim)
-            return
+        H = max(self.winfo_height(), int(self.winfo_fpixels(self['height'])))
         cy = H // 2 + 2
+        from gr8core import scene                                 # blend toward the backdrop colour at the beam
+        f_y = cy / H
+        st_ = scene.STOPS
+        for (a0, c0), (a1, c1) in zip(st_, st_[1:]):
+            if a0 <= f_y <= a1:
+                u = (f_y - a0) / (a1 - a0)
+                self.BG = tuple(c0[i] + (c1[i] - c0[i]) * u for i in range(3))
+                break
         cw, sw = self.cam.width(), self.store.width()
-        x0, x1 = cw + 14, W - sw - 14
+        x0, x1 = cw + 10, W - sw - 6
+        span = max(1, x1 - x0)
         shake = math.sin(self.t * 2.3) * 3 if st == 'error' else 0
-        self.create_image(6, cy, image=self.cam, anchor='w', tags='dna')
-        if st == 'busy' and self.t // 6 % 2:                     # blinking REC lamp
-            self.create_rectangle(6 + 66, cy - 33 + 27, 6 + 69, cy - 33 + 30, fill='#e2603f', outline='', tags='dna')
-        A, k, step = 26, 0.065, 5
-        rung = 14
-        pts = []
-        for x in range(x0, x1, step):
-            a = k * x - self.phase
-            fade = min(1.0, (x - x0) / 40, (x1 - x) / 40)
-            pts.append((x, cy + shake + A * math.sin(a) * fade, cy + shake - A * math.sin(a) * fade, math.cos(a)))
-        # rungs (base pairs), drawn first so strands sit on top
-        for x, ya, yb, z in pts:
-            if (x - x0) % rung >= step:
-                continue
-            idx = int((x - x0 - self.flow) // rung) % len(self.seq)
-            c1, c2 = self.BASES[self.seq[idx]]
+        self.create_image(4, cy, image=self.cam, anchor='w', tags='dna')
+        # how much of the spectrum is lit
+        if st == 'busy':
+            target = self.progress
+        elif st == 'ok':
+            target = 1.0
+        else:
+            target = 0.0
+        self.shown += (target - self.shown) * 0.18
+        head = x0 + span * self.shown
+        breathe = 0.5 + 0.5 * math.sin(self.t / 9)
+        pulse_x = x0 + (self.t * 6) % (span + 60) - 30                  # travelling light for scan / waiting
+        for x in range(x0, x1, 2):
+            f = (x - x0) / span
+            rgb = _wave_rgb(380 + 320 * f)
             if st == 'error':
-                c1 = c2 = '#e2603f'
-            elif st == 'ok' and self.until - self.t > 10:
-                c1 = c2 = '#fbfaff'
-            elif st == 'idle':
-                c1, c2 = _dim(c1), _dim(c2)
-            ym = (ya + yb) / 2
-            self.create_line(x, ya, x, ym, fill=c1, width=2, tags='dna')
-            self.create_line(x, ym, x, yb, fill=c2, width=2, tags='dna')
-        # strands: back half first, then front half
-        for front in (False, True):
-            for x, ya, yb, z in pts:
-                for y, zz, col in ((ya, z, self.STRANDS[0]), (yb, -z, self.STRANDS[1])):
-                    if (zz > 0) == front:
-                        r = 1.5 + 1.5 * (zz + 1) / 2
-                        c = col if zz > 0 else _dim(col)
-                        self.create_oval(x - r, y - r, x + r, y + r, fill=c, outline='', tags='dna')
-        sx = W - sw - 6
+                rgb = (0.95, 0.22 + 0.1 * math.sin(x / 7 + self.t), 0.16)
+            spread = 0.35 + 0.65 * min(1.0, f * 3)                       # thin at the lens, opens like a prism fan
+            wave = math.sin(x / 9 - self.t / 3) * 0.5 + math.sin(x / 23 + self.t / 5) * 0.5
+            hb = (4 + 9 * spread) * (1 + 0.18 * wave)
+            lit = x <= head or st == 'error'
+            if lit:
+                k = 1.0 if st != 'idle' else 0.55
+                if st == 'ok' and self.until - self.t > 50:
+                    k, white = 1.0, 0.55
+                else:
+                    white = 0.0
+            else:
+                k, white = (0.16 + 0.10 * breathe) if st in ('idle', 'busy') else 0.14, 0.0
+                if st in ('scan', 'busy') and abs(x - pulse_x) < 26:
+                    k = max(k, 0.85 * (1 - abs(x - pulse_x) / 26))
+                    white = 0.3
+            if st == 'error' and (self.t // 3) % 2:
+                k *= 0.5
+            y = cy + shake + math.sin(x / 15 - self.t / 4) * 2 * spread
+            self.create_line(x, y - hb * 1.7, x, y + hb * 1.7, fill=self._col(rgb, k * 0.35), width=2, tags='dna')
+            self.create_line(x, y - hb, x, y + hb, fill=self._col(rgb, k, white), width=2, tags='dna')
+            self.create_line(x, y - 1, x, y + 1, fill=self._col(rgb, k, min(1, white + 0.6)), width=2, tags='dna')
+        # the source glow at the lens, and the flare at the growing tip
+        lens = (x0 - 4, cy + shake)
+        for r, k in ((7, .25), (4, .6), (2, 1)):
+            self.create_oval(lens[0] - r, lens[1] - r, lens[0] + r, lens[1] + r, fill=self._col((1, 1, 1), k),
+                             outline='', tags='dna')
+        if st == 'busy' and x0 < head < x1 - 2:
+            hx, hy = head, cy + math.sin(head / 15 - self.t / 4) * 2
+            L = 9 + 4 * math.sin(self.t / 2)
+            self.create_line(hx - L, hy, hx + L, hy, fill='#ffffff', tags='dna')
+            self.create_line(hx, hy - L, hx, hy + L, fill='#ffffff', tags='dna')
+            self.create_oval(hx - 3, hy - 3, hx + 3, hy + 3, fill='#ffffff', outline='', tags='dna')
+        sx = W - sw - 4
         self.create_image(sx, cy, image=self.store, anchor='w', tags='dna')
-        if st in ('busy', 'scan'):                               # pearls appear under the nautilus = progress
-            done = int(self.progress * 6 + 0.001)
-            py = min(H - 6, cy + self.store.height() // 2 + 2)
-            for i in range(6):
-                x = sx + sw / 2 - 25 + i * 10
-                lit = i < done or (i == done and self.t // 4 % 2)
-                col = '#fbfaff' if i < done else '#8fb4ff' if lit else '#1b2766'
-                self.create_oval(x - 3, py - 3, x + 3, py + 3, fill=col, outline='', tags='dna')
-                if i < done:
-                    self.create_oval(x - 2, py - 2, x, py, fill='#ffffff', outline='', tags='dna')
         if st == 'ok':
             left = self.until - self.t
             for dx, dy, ph in self.sparks:
                 if (self.t + ph) % 8 < 5 and left > 0:
                     x, y = sx + sw / 2 + dx, cy + dy
                     self.create_line(x - 4, y, x + 5, y, fill='#fbfaff', tags='dna')
-                    self.create_line(x, y - 4, x, y + 5, fill='#8fb4ff', tags='dna')
-        self.after(40, self._anim)
+                    self.create_line(x, y - 4, x, y + 5, fill='#c9d8ff', tags='dna')
 
 
 def _dim(hexcol, k=0.45):
