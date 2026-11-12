@@ -105,20 +105,20 @@ print('assets written')
 
 # ---------------------------------------------------------------- converter animation sprites
 def camcorder(scale=3):
-    """Generic side-view handycam, lens pointing right (no brand) - beige + grey-blue."""
+    """Generic side-view handycam, lens pointing right (no brand) - key-art palette: pearl, ultramarine, blue-black."""
     W, H = 34, 22
     im = Image.new('RGBA', (W, H), (0, 0, 0, 0)); d = ImageDraw.Draw(im)
-    rim, body, hi, beige, cream = (122, 136, 158, 255), (52, 62, 80, 255), (90, 106, 128, 255), (200, 188, 160, 255), (239, 230, 208, 255)
+    rim, body, hi, beige, cream = (124, 140, 214, 255), (14, 22, 70, 255), (44, 78, 176, 255), (214, 212, 226, 255), (240, 237, 230, 255)
     d.rectangle((7, 3, 21, 4), fill=beige); d.rectangle((7, 4, 8, 7), fill=beige); d.rectangle((20, 4, 21, 7), fill=beige)  # handle
     d.rectangle((1, 6, 7, 11), fill=rim); d.rectangle((0, 7, 1, 10), fill=beige)            # viewfinder + eyecup
     d.rectangle((5, 7, 25, 18), fill=rim); d.rectangle((6, 8, 24, 17), fill=body)           # body
     d.line((6, 8, 24, 8), fill=hi)
-    d.rectangle((8, 10, 18, 16), fill=beige); d.rectangle((9, 11, 17, 15), fill=(26, 34, 48, 255))  # flip screen
-    d.line((10, 12, 13, 12), fill=cream); d.point((16, 14), fill=(208, 128, 106, 255))
-    d.point((22, 9), fill=(224, 83, 63, 255))                                                # REC lamp
+    d.rectangle((8, 10, 18, 16), fill=beige); d.rectangle((9, 11, 17, 15), fill=(6, 12, 44, 255))  # flip screen
+    d.line((10, 12, 13, 12), fill=cream); d.point((16, 14), fill=(201, 90, 60, 255))
+    d.point((22, 9), fill=(226, 96, 63, 255))                                                # REC lamp
     d.rectangle((25, 9, 29, 16), fill=body); d.rectangle((25, 9, 29, 16), outline=rim); d.line((26, 10, 28, 10), fill=hi)
-    d.rectangle((29, 8, 32, 17), fill=beige); d.rectangle((30, 9, 32, 16), fill=(40, 58, 86, 255))   # lens + glass
-    d.rectangle((31, 10, 31, 11), fill=cream); d.point((32, 14), fill=(169, 193, 224, 255))
+    d.rectangle((29, 8, 32, 17), fill=beige); d.rectangle((30, 9, 32, 16), fill=(16, 40, 140, 255))   # lens + glass
+    d.rectangle((31, 10, 31, 11), fill=cream); d.point((32, 14), fill=(143, 180, 255, 255))
     d.rectangle((6, 18, 24, 19), fill=rim)
     return im.resize((W * scale, H * scale), Image.NEAREST)
 

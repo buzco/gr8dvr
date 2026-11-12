@@ -16,8 +16,8 @@ if getattr(sys, 'frozen', False):                      # bundled ffmpeg/ffprobe/
 from gr8core import VERSION, convert, firmware, importer, legal, library, looks, sound, vendor  # noqa: E402
 import gr8w95 as w
 from gr8w95 import ACC, BEIGE, DK, F, FACE, FIELD, HI, LINK, LT, SH
-DIM = '#454c57'   # secondary text: 5.6:1 on the beige face
-OKC = '#2c6a46'   # success text
+DIM = '#454a66'   # secondary text on the pearl face
+OKC = '#1b6b55'   # success text
 
 DATA = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'gr8core', 'data')
 URL_SITE = 'https://gr8success.xyz'
@@ -63,99 +63,56 @@ def row_help(parent, widget, text):
 
 
 # ---------------------------------------------------------------- splash
-class FossilScene(w.Backdrop):
-    """Animated deep-sea scene: Paleozoic + Mesozoic fossils roaming, trilobites crawling, crinoids swaying,
-    marine snow and vent bubbles. Used by the boot screen and the About tab."""
-    SWIMMERS = [  # name, height fraction, speed px/tick, bob amplitude
-        ('ammonite', .50, .55, 4), ('orthocone', .40, .9, 2), ('ichthyosaur', .62, 1.2, 3),
-        ('anomalocaris', .73, -.75, 3), ('plesiosaur', .36, -.5, 4), ('ammonite', .70, -.4, 3)]
-    CRAWLERS = [(.25, .35), (.70, -.25)]                      # trilobites: x fraction, speed
-    CRINOIDS = [.06, .11, .86, .92, .97]
+class ArtScene(tk.Canvas):
+    """The key illustration (nautilus, prism, chip): a pre-cut PNG kept centred whatever the widget size, with a
+    few soft twinkles. `art` is the size of the real picture inside the PNG (the rest is a blurred echo), so
+    overlays can be placed in picture coordinates via place(item, x, y)."""
+    TWINKLES = [(.05, .07), (.16, .12), (.25, .05), (.34, .2), (.55, .03), (.64, .07), (.71, .44), (.96, .5),
+                (.58, .9), (.03, .72), (.44, .62), (.9, .97)]
 
-    def __init__(self, parent, **kw):
+    def __init__(self, parent, file, art, **kw):
         import random
-        self.ready = False
-        super().__init__(parent, floor=True, **kw)
-        self.rnd = random.Random()
-        self.imgs = {n: (tk.PhotoImage(file=asset(f'fossil_{n}.png')), tk.PhotoImage(file=asset(f'fossil_{n}_l.png')))
-                     for n in ('ammonite', 'orthocone', 'ichthyosaur', 'anomalocaris', 'plesiosaur', 'trilobite')}
-        self.crin = [tk.PhotoImage(file=asset(f'fossil_crinoid{f}.png')) for f in (0, 1)]
-        W, H = self._dims()
-        self.crinoids = [self.create_image(0, 0, image=self.crin[0], anchor='s', tags='fossil') for _ in self.CRINOIDS]
-        self.fish = []
-        for n, fy, v, amp in self.SWIMMERS:
-            self.fish.append({'id': self.create_image(0, 0, image=self.imgs[n][0 if v > 0 else 1], tags='fossil'),
-                              'x': self.rnd.uniform(0, W), 'fy': fy, 'v': v, 'amp': amp, 'ph': self.rnd.uniform(0, 6)})
-        for fx, v in self.CRAWLERS:
-            self.fish.append({'id': self.create_image(0, 0, image=self.imgs['trilobite'][0 if v > 0 else 1], tags='fossil'),
-                              'x': fx * W, 'fy': None, 'v': v, 'amp': 0, 'ph': 0})
-        self.snow = [[self.rnd.uniform(0, W), self.rnd.uniform(H * .3, H), self.rnd.uniform(.15, .5),
-                      self.create_rectangle(0, 0, 0, 0, fill='#b8c2cc', outline='', tags='fossil')] for _ in range(70)]
-        self.bubbles, self.t = [], 0
-        self.stars = [self.create_rectangle(0, 0, 0, 0, outline='', tags='fossil') for _ in range(18)]
-        self.ready = True
-        self.on_resize(W, H)
+        super().__init__(parent, bg='#00031a', highlightthickness=0, bd=0, **kw)
+        self.img = tk.PhotoImage(file=asset(file))
+        self.art, self.ox, self.oy, self.t = art, 0, 0, 0
+        self.create_image(0, 0, image=self.img, anchor='center', tags='sky')
+        self.placed = []
+        rnd = random.Random(4)
+        self.tw = [(fx, fy, rnd.randrange(40), self.create_line(0, 0, 0, 0, fill='', tags='tw'),
+                    self.create_line(0, 0, 0, 0, fill='', tags='tw')) for fx, fy in self.TWINKLES]
+        self.bind('<Configure>', self._fit, add='+')
         self._anim()
 
-    def on_resize(self, W, H):
-        if not self.ready:
-            return
-        from gr8core import scene
-        self.W, self.H = W, H
-        for i, fx in zip(self.crinoids, self.CRINOIDS):
-            self.coords(i, fx * W, scene.floor_y(W, H, fx * W) + 4)
-        for s in self.stars:
-            x, y = self.rnd.randrange(W), self.rnd.randrange(max(1, int(H * .25)))
-            self.coords(s, x, y, x + 1, y + 1)
-        for f in self.fish:
-            f['x'] = min(f['x'], W)
-        self.tag_raise('fossil', 'sky')
-        self.tag_raise('ui')
+    def place(self, item, x, y):
+        """Pin a canvas item to picture coordinates (re-applied on resize)."""
+        self.placed.append((item, x, y))
+        self.coords(item, self.ox + x, self.oy + y)
+        return item
+
+    def _fit(self, e):
+        self.coords('sky', e.width // 2, e.height // 2)
+        self.ox, self.oy = (e.width - self.art[0]) // 2, (e.height - self.art[1]) // 2
+        for item, x, y in self.placed:
+            self.coords(item, self.ox + x, self.oy + y)
+        self.tag_raise('tw'); self.tag_raise('ui')
 
     def _anim(self):
-        import math
-        from gr8core import scene
-        self.after(40, self._anim)
+        self.after(70, self._anim)
         if not self.winfo_ismapped():
             return
         self.t += 1
-        W, H = self.W, self.H
-        for f in self.fish:
-            f['x'] += f['v']
-            if f['x'] > W + 70:
-                f['x'] = -70
-            elif f['x'] < -70:
-                f['x'] = W + 70
-            y = (f['fy'] * H + f['amp'] * math.sin(self.t / 14 + f['ph'])) if f['fy'] else \
-                scene.floor_y(W, H, f['x']) - 6
-            self.coords(f['id'], f['x'], y)
-        for s in self.snow:
-            s[1] += s[2]
-            s[0] += math.sin((self.t + s[1]) / 30) * .2
-            if s[1] > H * .88:
-                s[0], s[1] = self.rnd.uniform(0, W), H * .3
-            self.coords(s[3], s[0], s[1], s[0] + 1, s[1] + 1)
-        if self.t % 9 == 0:
-            b = self.create_oval(0, 0, 0, 0, outline='#a9c1e0', tags='fossil')
-            self.tag_lower(b, 'fossil')
-            self.bubbles.append([W * .8 + self.rnd.uniform(-4, 4), H * .85, b])
-        for bub in list(self.bubbles):
-            bub[1] -= 1.1
-            bub[0] += math.sin(bub[1] / 8) * .4
-            r = 1 + (H * .85 - bub[1]) / 70
-            self.coords(bub[2], bub[0] - r, bub[1] - r, bub[0] + r, bub[1] + r)
-            if bub[1] < H * .3:
-                self.delete(bub[2]); self.bubbles.remove(bub)
-        if self.t % 15 == 0:
-            for k, i in enumerate(self.crinoids):
-                self.itemconfigure(i, image=self.crin[(self.t // 15 + k) % 2])
-        for i, s in enumerate(self.stars):
-            self.itemconfigure(s, fill=('#f8f3e7', '#a9c1e0', '#efe6d0', '#1a2233')[(self.t // 6 + i * 3) % 4])
+        for fx, fy, ph, h, v in self.tw:
+            k = (self.t + ph) % 40
+            r = (0, 1, 2, 3, 2, 1, 0)[k] if k < 7 else 0          # brief, soft sparkle
+            x, y = self.ox + fx * self.art[0], self.oy + fy * self.art[1]
+            col = ('#8fb4ff', '#c9d8ff', '#fbfaff', '#fbfaff', '#fbfaff', '#c9d8ff', '#8fb4ff')[k] if r else ''
+            self.coords(h, x - r - 1, y, x + r + 2, y); self.coords(v, x, y - r - 1, x, y + r + 2)
+            self.itemconfigure(h, fill=col); self.itemconfigure(v, fill=col)
 
 
 class Splash(tk.Toplevel):
-    """Boot screen: the fossil scene with the GR8DVR and Buzco logos, legal notice and a loading bar."""
-    STEPS = ['Waking the trilobites…', 'Loading looks…', 'Checking FFmpeg…', 'Reading firmware patch…',
+    """Boot screen: the key illustration with the GR8DVR and Buzco logos, legal notice and a loading bar."""
+    STEPS = ['Waking the nautilus…', 'Loading looks…', 'Checking FFmpeg…', 'Reading firmware patch…',
              'Warming up the tape heads…', 'Ready']
 
     def __init__(self, root, done):
@@ -166,7 +123,7 @@ class Splash(tk.Toplevel):
         b = w.Bevel(self, 'raised')
         b.pack()
         W, H = 600, 300
-        c = self.c = FossilScene(b.inner, width=W, height=H)
+        c = self.c = ArtScene(b.inner, 'splash.png', (W, H), width=W, height=H)
         c.pack(padx=4, pady=(4, 0))
         self.logo = tk.PhotoImage(file=asset('logo.png'))
         self.buzco = tk.PhotoImage(file=asset('buzco_small.png'))
@@ -392,7 +349,7 @@ class ClipTab:
         top.pack(fill='x')
         hb = w.Bevel(top, 'sunken', bg=DK)
         hb.pack(side='left')
-        self.helix = w.Helix(hb.inner, asset('camcorder.png'), asset('rock.png'),
+        self.helix = w.Helix(hb.inner, asset('camcorder.png'), asset('nautilus_real.png'),
                              width=430, height=94)
         self.helix.pack()
         hd = tk.Frame(top)
@@ -522,7 +479,7 @@ class ClipTab:
             self.tree.heading(c, text=t, anchor='w')
             self.tree.column(c, width=wd, minwidth=24, stretch=c == 'status', anchor='w')
         self.tree.tag_configure('old', foreground=DIM)
-        self.tree.tag_configure('fail', foreground='#a00000')
+        self.tree.tag_configure('fail', foreground='#a8321c')
         self.tree.tag_configure('done', foreground=OKC)
         self.box_on, self.box_off = _checkbox_img(True), _checkbox_img(False)
         sb = ttk.Scrollbar(g, command=self.tree.yview)
@@ -1014,16 +971,16 @@ class FirmwareTab:
 
         side = w.Bevel(page, 'sunken', bg=DK)
         side.pack(side='left', fill='y')
-        self.sky = w.Backdrop(side.inner, floor=True, seed=5, width=216, height=10)
+        self.sky = ArtScene(side.inner, 'sidebar.png', (216, 612), width=216, height=10)
         self.sky.pack(fill='y', expand=True)
         self.icon = tk.PhotoImage(file=asset('nautilus_dvr.png'))
-        self.sky.create_image(108, 150, image=self.icon, tags='icon')
+        self.sky.create_image(108, 150, image=self.icon, tags=('icon', 'ui'))
         self.sky.create_text(109, 251, text='Mini DVR\nFirmware Builder', fill='#000000', font=F['bold'],
-                             justify='center', tags='label')
+                             justify='center', tags=('label', 'ui'))
         self.sky.create_text(108, 250, text='Mini DVR\nFirmware Builder', fill=BEIGE, font=F['bold'],
-                             justify='center', tags='label')
-        self.sky.bind('<Configure>', lambda e: [self.sky.coords(i, 108 + k, e.height // 2 + 82 + k) for k, i in
-                                                zip((1, 0), self.sky.find_withtag('label'))], add='+')
+                             justify='center', tags=('label', 'ui'))
+        for k, i in zip((1, 0), self.sky.find_withtag('label')):     # below the prism, above the chip
+            self.sky.place(i, 108 + k, 505 + k)
         self.bob = 0
         self._float()
 
@@ -1049,8 +1006,7 @@ class FirmwareTab:
     def _float(self):
         import math
         self.bob += 1
-        h = self.sky.winfo_height() or 300
-        self.sky.coords('icon', 108, h // 2 - 60 + round(math.sin(self.bob / 6) * 3))
+        self.sky.coords('icon', 108, self.sky.oy + 375 + round(math.sin(self.bob / 6) * 3))
         self.sky.after(80, self._float)
 
     @staticmethod
@@ -1178,7 +1134,7 @@ class FirmwareTab:
                 self.vmsg.configure(text='✓ Eachine original firmware ready and verified.', fg=OKC)
             elif not self.vendor_ok:
                 self.vbar.set(0)
-                self.vmsg.configure(text=f'✗ {err}', fg='#a00000')
+                self.vmsg.configure(text=f'✗ {err}', fg='#a8321c')
                 sound.play('error')
         self.validate()
 
@@ -1196,7 +1152,7 @@ class FirmwareTab:
             self.vmsg.configure(text='✓ Original Eachine firmware recognised.', fg=OKC)
         except firmware.FirmwareError as e:
             self.vendor_ok = False
-            self.vmsg.configure(text=f'✗ {e}', fg='#a00000')
+            self.vmsg.configure(text=f'✗ {e}', fg='#a8321c')
             return
         self.vbar.set(1)
         self.validate()
@@ -1322,35 +1278,41 @@ class FirmwareTab:
 
 # ---------------------------------------------------------------- about tab
 class AboutTab:
+    """The key illustration, slightly darkened; text sits on the calm area right of the nautilus."""
+    X, Y, WRAP = 532, 140, 410                                   # text block, in picture coordinates (970 x 580)
+
     def __init__(self, app, page):
         b = w.Bevel(page, 'sunken', bg=DK)
         b.pack(fill='both', expand=True)
-        self.scene = sc = FossilScene(b.inner)
+        self.scene = sc = ArtScene(b.inner, 'about.png', (970, 580))
         sc.pack(fill='both', expand=True)
         self.logo = tk.PhotoImage(file=asset('logo_about.png'))
         self.buzco = tk.PhotoImage(file=asset('buzco.png'))
-        sc.create_rectangle(29, 21, 34 + self.logo.width(), 26 + self.logo.height(), fill=BEIGE, outline=BEIGE, tags='ui')
-        sc.create_image(32, 24, image=self.logo, anchor='nw', tags='ui')
-        lines = [(f'Version {VERSION}  ·  Freeware', F['title']), ('', F['ui']),
+        X, y = self.X, self.Y
+        sc.place(sc.create_image(0, 0, image=self.logo, anchor='nw', tags='ui'), X, y)
+        lines = [(f'Version {VERSION}  ·  Freeware', F['title']),
                  ('Made in Lisbon by Buzco · GR8 Success.', F['bold']),
                  ('Built for MiniDV lovers capturing with a pocket DVR.', F['ui']),
                  ('Base firmware: Eachine ProDVR firmware (c) Eachine - included unmodified, all rights theirs.', F['ui']),
                  ('Firmware research: open-minidvr-50i by eonflux7 (MIT).', F['ui']),
                  ('Video engine: FFmpeg (GPL).', F['ui'])]
-        y = 24 + self.logo.height() + 18
-        for t, fnt in lines:
-            sc.create_text(32 + 2, y + 2, text=t, anchor='nw', font=fnt, fill='#000000', tags='ui')
-            sc.create_text(32, y, text=t, anchor='nw', font=fnt, fill=BEIGE, tags='ui')
-            y += 26
-        btns = tk.Frame(sc, bg=FACE)
-        w.Button(btns, 'Donate…', lambda: webbrowser.open(URL_DONATE), width=100, bold=True).pack(side='left', padx=4, pady=4)
-        w.Button(btns, 'Buzco store', lambda: webbrowser.open(URL_SHOP), width=100).pack(side='left', padx=4)
-        w.Button(btns, 'Website', lambda: webbrowser.open(URL_PAGE), width=100).pack(side='left', padx=4)
-        w.Button(btns, 'License…', app.show_license, width=100).pack(side='left', padx=4)
-        sc.create_window(32, y + 16, window=btns, anchor='nw', tags='ui')
-        bz = sc.create_image(0, 0, image=self.buzco, anchor='ne', tags=('buzco', 'ui'))
+        y += self.logo.height() + 16
+        for i, (t, fnt) in enumerate(lines):
+            for dx, col in ((1, '#000000'), (0, BEIGE)):
+                it = sc.create_text(0, 0, text=t, anchor='nw', font=fnt, fill=col, width=self.WRAP, tags='ui')
+                sc.place(it, X + dx, y + dx)
+            sc.update_idletasks()
+            bb = sc.bbox(it)
+            y += (bb[3] - bb[1] if bb else 18) + (12 if i == 0 else 5)
+        btns = tk.Frame(sc, bg=DK)
+        for txt, cmd, bold in (('Donate…', lambda: webbrowser.open(URL_DONATE), True),
+                               ('Buzco store', lambda: webbrowser.open(URL_SHOP), False),
+                               ('Website', lambda: webbrowser.open(URL_PAGE), False),
+                               ('License…', app.show_license, False)):
+            w.Button(btns, txt, cmd, width=96, bold=bold).pack(side='left', padx=(0, 6))
+        sc.place(sc.create_window(0, 0, window=btns, anchor='nw', tags='ui'), X, y + 12)
+        bz = sc.place(sc.create_image(0, 0, image=self.buzco, anchor='nw', tags='ui'), 28, 26)
         sc.tag_bind(bz, '<Button-1>', lambda e: webbrowser.open(URL_SITE))
-        sc.bind('<Configure>', lambda e: sc.coords('buzco', e.width - 28, 26), add='+')
 
 
 def _checkbox_img(on):

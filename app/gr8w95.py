@@ -3,10 +3,10 @@ import tkinter as tk
 from tkinter import font as tkfont
 
 # GR8DVR palette: beige + dark grey-blue (from the logo). Text DK on FACE = 10:1, FIELD text on ACC = 10:1.
-FACE, HI, LT, SH, DK = '#d8cfba', '#f8f3e7', '#e9e1cf', '#958a73', '#252d3a'
-ACC, ACC_HI = '#2f3d52', '#5a7394'          # selection, progress, highlights
-TIP, LINK, FIELD = '#fff6dc', '#1d4f9c', '#f6f0e1'
-BEIGE, NAVY = '#efe6d0', '#2b3340'          # logo colours
+FACE, HI, LT, SH, DK = '#dcdbe4', '#fbfaff', '#ecebf2', '#8b8aa6', '#0b0f2e'   # pearl (nacre) face
+ACC, ACC_HI = '#0b2a9e', '#3d7be0'          # selection, progress, highlights
+TIP, LINK, FIELD = '#f4f2ff', '#1f3fc8', '#f7f6f2'
+BEIGE, NAVY = '#f0ede6', '#0a1030'          # logo colours
 F = {}
 
 
@@ -454,14 +454,15 @@ class Backdrop(tk.Canvas):
     """The sky-to-deep-sea gradient (gr8core.scene), re-rendered to fit whenever the widget is resized."""
     def __init__(self, parent, floor=True, stars=1.0, seed=7, **kw):
         kw.setdefault('height', 60)
-        super().__init__(parent, bg='#00080e', highlightthickness=0, bd=0, **kw)
+        super().__init__(parent, bg='#00031a', highlightthickness=0, bd=0, **kw)
         self.floor, self.star_density, self.seed = floor, stars, seed
         self._size, self._job, self.img = None, None, None
         self.bind('<Configure>', lambda e: self._layout(), add='+')
         self._render()
 
     def _dims(self):
-        return (max(self.winfo_width(), int(self['width'] or 1), 2), max(self.winfo_height(), int(self['height'] or 1), 2))
+        return (max(self.winfo_width(), int(self.winfo_fpixels(self['width'] or 1)), 2),
+                max(self.winfo_height(), int(self.winfo_fpixels(self['height'] or 1)), 2))
 
     def _layout(self):
         if self._job:
@@ -486,14 +487,14 @@ class Backdrop(tk.Canvas):
 
 
 class Helix(Backdrop):
-    """Data conversion as a DNA double helix flowing from a camcorder into a sedimentary rock.
+    """Data conversion as a DNA double helix flowing from a camcorder into a nautilus.
     states: idle (slow spin), scan (gentle flow), busy (fast flow + REC lamp), ok (white flash, sparkles), error (red shake)"""
-    # base pairs in the logo / rock palette: beige-slate, sand-blue, rust-cream, cream-rust
-    BASES = [('#efe6d0', '#8fa6c4'), ('#8fa6c4', '#efe6d0'), ('#c4aa80', '#d0806a'), ('#d0806a', '#c4aa80')]
-    STRANDS = ('#f8f3e7', '#a9c1e0')
+    # base pairs from the key art: pearl-cobalt, cobalt-pearl, lavender-nautilus rust, rust-lavender
+    BASES = [('#f0ede6', '#5b8cf0'), ('#5b8cf0', '#f0ede6'), ('#a9b2ec', '#c95a3c'), ('#c95a3c', '#a9b2ec')]
+    STRANDS = ('#fbfaff', '#8fb4ff')
 
     def __init__(self, parent, cam_png, store_png, height=104, **kw):
-        super().__init__(parent, floor=True, stars=1.4, seed=3, height=height, **kw)
+        super().__init__(parent, floor=False, stars=1.4, seed=3, height=height, **kw)
         import random
         self.cam = tk.PhotoImage(file=cam_png)
         self.store = tk.PhotoImage(file=store_png)
@@ -531,7 +532,7 @@ class Helix(Backdrop):
         shake = math.sin(self.t * 2.3) * 3 if st == 'error' else 0
         self.create_image(6, cy, image=self.cam, anchor='w', tags='dna')
         if st == 'busy' and self.t // 6 % 2:                     # blinking REC lamp
-            self.create_rectangle(6 + 66, cy - 33 + 27, 6 + 69, cy - 33 + 30, fill='#e0533f', outline='', tags='dna')
+            self.create_rectangle(6 + 66, cy - 33 + 27, 6 + 69, cy - 33 + 30, fill='#e2603f', outline='', tags='dna')
         A, k, step = 26, 0.065, 5
         rung = 14
         pts = []
@@ -546,9 +547,9 @@ class Helix(Backdrop):
             idx = int((x - x0 - self.flow) // rung) % len(self.seq)
             c1, c2 = self.BASES[self.seq[idx]]
             if st == 'error':
-                c1 = c2 = '#e0533f'
+                c1 = c2 = '#e2603f'
             elif st == 'ok' and self.until - self.t > 10:
-                c1 = c2 = '#f8f3e7'
+                c1 = c2 = '#fbfaff'
             elif st == 'idle':
                 c1, c2 = _dim(c1), _dim(c2)
             ym = (ya + yb) / 2
@@ -564,21 +565,23 @@ class Helix(Backdrop):
                         self.create_oval(x - r, y - r, x + r, y + r, fill=c, outline='', tags='dna')
         sx = W - sw - 6
         self.create_image(sx, cy, image=self.store, anchor='w', tags='dna')
-        if st in ('busy', 'scan'):                               # strata get deposited bottom-up = progress
-            tops = [4, 9, 13, 17, 21, 25]
+        if st in ('busy', 'scan'):                               # pearls appear under the nautilus = progress
             done = int(self.progress * 6 + 0.001)
-            for i in range(min(done + 1, 6)):
-                y = cy - 45 + tops[5 - i] * 3
-                if i < done or self.t // 4 % 2:
-                    self.create_line(sx + 12, y, sx + 84, y, fill='#f8f3e7' if i < done else '#a9c1e0',
-                                     width=2, tags='dna')
+            py = min(H - 6, cy + self.store.height() // 2 + 2)
+            for i in range(6):
+                x = sx + sw / 2 - 25 + i * 10
+                lit = i < done or (i == done and self.t // 4 % 2)
+                col = '#fbfaff' if i < done else '#8fb4ff' if lit else '#1b2766'
+                self.create_oval(x - 3, py - 3, x + 3, py + 3, fill=col, outline='', tags='dna')
+                if i < done:
+                    self.create_oval(x - 2, py - 2, x, py, fill='#ffffff', outline='', tags='dna')
         if st == 'ok':
             left = self.until - self.t
             for dx, dy, ph in self.sparks:
                 if (self.t + ph) % 8 < 5 and left > 0:
                     x, y = sx + sw / 2 + dx, cy + dy
-                    self.create_line(x - 4, y, x + 5, y, fill='#f8f3e7', tags='dna')
-                    self.create_line(x, y - 4, x, y + 5, fill='#f8f3e7', tags='dna')
+                    self.create_line(x - 4, y, x + 5, y, fill='#fbfaff', tags='dna')
+                    self.create_line(x, y - 4, x, y + 5, fill='#8fb4ff', tags='dna')
         self.after(40, self._anim)
 
 

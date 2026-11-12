@@ -26,15 +26,15 @@ L = rgb @ np.array([.299, .587, .114])
 c = np.clip((rgb - .04) * 1.18, 0, 1)
 shadow = (1 - np.clip(L / .35, 0, 1))[..., None]
 c = c * (1 - .35 * shadow) + shadow * .35 * np.array([.05, .09, .16])
-c = c + (np.clip(L - .1, 0, .3)[..., None]) * np.array([-.02, .05, .06])        # mint-cyan in the mids
+c = c + (np.clip(L - .1, 0, .3)[..., None]) * np.array([-.02, .01, .08])        # cool blue in the mids
 # glossy diagonal streaks (screen)
 yy, xx = np.mgrid[0:H, 0:Wc].astype(np.float32)
 d = (xx * .62 - yy) / Wc
 g = np.exp(-((d - .05) / .035) ** 2) * .22 + np.exp(-((d - .13) / .012) ** 2) * .16
-c = 1 - (1 - c) * (1 - g[..., None] * np.array([.85, 1, .97]))
-if '--tint' in sys.argv:                                   # gradient-map to the GR8DVR palette: navy blacks, slate mids, mint gloss, beige print
+c = 1 - (1 - c) * (1 - g[..., None] * np.array([.86, .92, 1]))
+if '--tint' in sys.argv:                                   # gradient-map to the GR8DVR palette: blue-black, ultramarine mids, icy gloss, pearl print
     stops = np.array([0, .18, .42, .66, .86, 1.0])
-    cols = np.array([(6, 10, 20), (24, 32, 48), (47, 61, 82), (96, 150, 140), (196, 214, 196), (239, 230, 208)]) / 255
+    cols = np.array([(2, 3, 14), (5, 8, 30), (14, 26, 78), (52, 84, 170), (176, 190, 232), (242, 240, 234)]) / 255
     Lc = np.clip(c @ np.array([.299, .587, .114]), 0, 1)
     mapped = np.stack([np.interp(Lc, stops, cols[:, i]) for i in range(3)], -1)
     c = mapped * .88 + c * .12

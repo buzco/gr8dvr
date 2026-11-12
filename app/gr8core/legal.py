@@ -66,7 +66,7 @@ You are responsible for having the rights to any material you convert.
 - NumPy - BSD 3-Clause License.
 - Python and Tkinter - Python Software Foundation License. Packaged with PyInstaller.
 - Texas Instruments TVP5150 datasheet - register documentation used for research.
-- Design, pixel art, sounds and fossil animation: Buzco / GR8 Success.
+- Design, artwork, pixel art and sounds: Buzco / GR8 Success.
 
 8. CONTACT
 gr8success.xyz
