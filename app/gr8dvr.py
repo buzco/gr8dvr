@@ -1291,8 +1291,8 @@ class AboutTab:
         X, y = self.X, self.Y
         sc.place(sc.create_image(0, 0, image=self.logo, anchor='nw', tags='ui'), X, y)
         lines = [(f'Version {VERSION}  ·  Freeware', F['title']),
-                 ('Made in Lisbon by Buzco · GR8 Success.', F['bold']),
-                 ('Built for MiniDV lovers capturing with a pocket DVR.', F['ui']),
+                 ('Powered by Buzco™ · GR8 Success.', F['bold']),
+                 ('Built for MiniDV enthusiasts capturing with a pocket DVR.', F['ui']),
                  ('Base firmware: Eachine ProDVR firmware (c) Eachine - included unmodified, all rights theirs.', F['ui']),
                  ('Firmware research: open-minidvr-50i by eonflux7 (MIT).', F['ui']),
                  ('Video engine: FFmpeg (GPL).', F['ui'])]
