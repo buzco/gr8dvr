@@ -745,8 +745,9 @@ class ClipTab:
                        f"{'GR8DVR' if self.use_looks.get() else 'original'}.mp4")
             else:
                 txt = convert.describe(r['info'], self.fmt.get(), self.quality.get(), r['rotate'],
-                                       self.deint.get()).replace('\n', '  ·  ')
-                txt += f'\nSaved as: {name}{convert.FORMATS[self.fmt.get()][0]}'
+                                       self.deint.get(), r['path']).replace('\n', '  ·  ')
+                txt += (f'\nSaved as: {name}_GR8DVR.mp4' if convert.is_dvr_fields(r['path'], r['info'])
+                        else f'\nSaved as: {name}{convert.FORMATS[self.fmt.get()][0]}')
         self.explain.configure(state='normal')
         self.explain.delete('1.0', 'end')
         self.explain.insert('1.0', txt)
@@ -870,13 +871,13 @@ class ClipTab:
             prog(0)
             try:
                 stem = self._out_name(r)
-                if self.dvr:
+                if self.dvr or convert.is_dvr_fields(r['path'], r.get('info')):
                     import re
                     sys.stdout = _QWriter(lambda s: [prog(int(m) / 100 * 0.8) for m in re.findall(r'(\d+)%', s)[-1:]])
                     try:
-                        outs = importer.import_clip(r['path'], out, use_looks=o['looks'], overscan=o['overscan'],
-                                                    keep_576i=o['keep'],
-                                                    out_name=self._free(out, stem, '_GR8DVR.mp4' if o['looks']
+                        outs = importer.import_clip(r['path'], out, use_looks=o.get('looks', True),
+                                                    overscan=o.get('overscan', True), keep_576i=o.get('keep', False),
+                                                    out_name=self._free(out, stem, '_GR8DVR.mp4' if o.get('looks', True)
                                                                         else '_original.mp4'),
                                                     log=lambda m: prog(0.85) if 'grading' in m else None,
                                                     rotate=r['rotate'])

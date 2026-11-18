@@ -127,10 +127,21 @@ def preview_png(src, t=0.0, rotate='0°', width=320, info=None, size=None):
     return b''
 
 
-def describe(info, fmt, quality, rotate, deinterlace):
+def is_dvr_fields(path, info):
+    """A raw Mini DVR D1 recording: MJPEG .AVI holding one field per frame (704x288 PAL / 704x240 NTSC).
+    A plain conversion would play ~4x too slow with the sound running out early, so these go through the importer."""
+    return bool(info and info.get('video') and path.lower().endswith('.avi') and info.get('codec') == 'mjpeg'
+                and info.get('width') == 704 and info.get('height') in (288, 240))
+
+
+def describe(info, fmt, quality, rotate, deinterlace, path=''):
     """Plain-language list of exactly what will happen to this clip."""
     if not info:
         return 'Reading the clip…'
+    if is_dvr_fields(path, info):
+        return ('Mini DVR recording (one half-picture per frame).\n'
+                'Converted like the Mini DVR Import tab: both fields woven to full 576/480 lines, real speed, '
+                'sound in sync, your looks applied.\nOutput: MP4 · H.264 (the format choice does not apply).')
     ext, vargs, _, desc = FORMATS[fmt]
     lines = []
     if info.get('video'):
