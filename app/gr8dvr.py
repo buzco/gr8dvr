@@ -184,8 +184,7 @@ class App:
         self._header()
         self.tabs = w.Tabs(root)
         self.tabs.pack(fill='both', expand=True, padx=6, pady=(4, 2))
-        self.converter = ClipTab(self, self.tabs.add('Media Converter'), 'media')
-        self.importer = ClipTab(self, self.tabs.add('Mini DVR Import'), 'dvr')
+        self.converter = ClipTab(self, self.tabs.add('Import & Convert'), 'media')
         self.builder = FirmwareTab(self, self.tabs.add('Mini DVR Firmware Builder'))
         self.about = AboutTab(self, self.tabs.add('About'))
         self._footer()
@@ -196,7 +195,7 @@ class App:
         m = tk.Menu(self.root, tearoff=0)
         f = tk.Menu(m, tearoff=0)
         f.add_command(label='Add videos…', command=lambda: (self.tabs.select(0), self.converter.add_files()))
-        f.add_command(label='Rescan cards', command=lambda: (self.converter.rescan(), self.importer.rescan()))
+        f.add_command(label='Rescan cards', command=lambda: self.converter.rescan())
         f.add_separator()
         f.add_command(label='Exit', command=self.root.destroy)
         m.add_cascade(label='File', menu=f, underline=0)
@@ -212,7 +211,7 @@ class App:
         h.add_command(label='Donate…', command=lambda: webbrowser.open(URL_DONATE))
         h.add_command(label='Buzco store', command=lambda: webbrowser.open(URL_SHOP))
         h.add_separator()
-        h.add_command(label='About GR8DVR', command=lambda: self.tabs.select(3))
+        h.add_command(label='About GR8DVR', command=lambda: self.tabs.select(2))
         m.add_cascade(label='Help', menu=h, underline=0)
         self.root.configure(menu=m)
 
@@ -301,7 +300,7 @@ def open_folder(path):
         subprocess.Popen(['xdg-open', path])
 
 
-# ---------------------------------------------------------------- clip tabs (Media Converter + Mini DVR Import)
+# ---------------------------------------------------------------- Import & Convert (camcorders, cameras, Mini DVR)
 ROT_STEPS = ['0°', '90° ⟳', '180°', '90° ⟲']
 ROT_NAMES = {'0°': 'Normal', '90° ⟳': 'Right 90°', '180°': '180°', '90° ⟲': 'Left 90°'}
 
@@ -372,7 +371,7 @@ class ClipTab:
             w.Button(r, 'Add files…', self.add_files).pack(side='left', padx=(4, 0))
         w.Help(r, 'GR8DVR finds your card by itself: '
                   + ('Mini DVR cards (PICT*.AVI). ' if self.dvr else
-                     'AVCHD camcorders (PRIVATE\\AVCHD) and camera cards (DCIM). ')
+                     'Mini DVR cards (PICT*.AVI), AVCHD camcorders (PRIVATE\\AVCHD) and camera cards (DCIM). ')
                   + 'Plug the card or camcorder in and it shows up within a few seconds.\n\n'
                   'Somewhere else? Use Pick folder… - GR8DVR remembers it next time.').pack(side='left', padx=(6, 0))
         tk.Label(g, text='Save to:', font=F['bold']).grid(row=1, column=0, sticky='w', pady=(4, 0))
@@ -433,6 +432,16 @@ class ClipTab:
                       'clips.\n\nFormats: MP4 H.264 plays everywhere (iPhone, Instagram, PC). H.265 is half '
                       'the size. ProRes is for editing. GIF for short loops. MP3 for just the sound.'
                    ).pack(side='right')
+            r = tk.Frame(g)
+            r.pack(fill='x', pady=(3, 0))
+            w.Check(r, 'Mini DVR: apply looks', self.use_looks).pack(side='left')
+            w.Check(r, 'hide edges', self.overscan).pack(side='left', padx=(6, 0))
+            w.Help(r, 'Mini DVR clips (marked ▶ Mini DVR) are recognised by themselves and always come out as '
+                      'smooth MP4: both half-pictures woven together, real speed, sound in sync.\n\n'
+                      'Apply looks: GR8DVR firmware stamps the look number (0-8) into every frame - ON applies '
+                      'the matching colour look, also when you switched mid-recording. OFF = original colours.'
+                      '\n\nHide edges: trims the noisy analog edges a TV would hide, then scales back to full '
+                      '4:3.').pack(side='right')
         g = w.group(row, 'Exact conversion settings for the selected clip')
         g.pack(side='left', fill='both', expand=True)
         eb = w.Bevel(g, 'sunken', bg=FIELD)
@@ -472,8 +481,8 @@ class ClipTab:
                   'twice. Tick them yourself if you want them again.').pack(side='left', padx=6)
         cols = ('clip', 'rec', 'len', 'type', 'orient', 'size', 'status')
         self.tree = ttk.Treeview(g, columns=cols, show='tree headings', selectmode='extended', height=4)
-        heads = {'#0': ('', 30), 'clip': ('Clip', 94), 'rec': ('Recorded', 116), 'len': ('Length', 54),
-                 'type': ('Type', 94), 'orient': ('Orientation', 74), 'size': ('Size', 58),
+        heads = {'#0': ('', 30), 'clip': ('Clip', 90), 'rec': ('Recorded', 108), 'len': ('Length', 54),
+                 'type': ('Type', 112), 'orient': ('Orientation', 74), 'size': ('Size', 58),
                  'status': ('Status', 100)}
         for c, (t, wd) in heads.items():
             self.tree.heading(c, text=t, anchor='w')
@@ -481,6 +490,7 @@ class ClipTab:
         self.tree.tag_configure('old', foreground=DIM)
         self.tree.tag_configure('fail', foreground='#a8321c')
         self.tree.tag_configure('done', foreground=OKC)
+        self.tree.tag_configure('dvr', foreground=ACC)
         self.box_on, self.box_off = _checkbox_img(True), _checkbox_img(False)
         sb = ttk.Scrollbar(g, command=self.tree.yview)
         self.tree.configure(yscrollcommand=sb.set)
@@ -554,7 +564,7 @@ class ClipTab:
         threading.Thread(target=self._scan, args=(sid,), daemon=True).start()
 
     def _scan(self, sid):
-        kinds = ('dvr',) if self.dvr else ('avchd', 'camera')
+        kinds = ('dvr',) if self.dvr else ('dvr', 'avchd', 'camera')
         try:
             srcs = library.scan(kinds)
         except Exception:                                    # noqa: BLE001
@@ -571,12 +581,6 @@ class ClipTab:
             labels.append(f'{len(self.manual)} added file(s)')
             clips += self.manual
         hint = ''
-        if not self.dvr:
-            try:
-                if library.scan(('dvr',)):
-                    hint = '   + Mini DVR card → see Mini DVR Import'
-            except Exception:                                # noqa: BLE001
-                pass
         seen, uniq = set(), []
         for c in clips:
             k = os.path.normcase(os.path.abspath(c))
@@ -619,7 +623,8 @@ class ClipTab:
                 r['fp'] = library.fingerprint(r['path'])
                 r['info'] = convert.probe(r['path']) or {'duration': 0, 'video': False}
                 r['when'] = library.recorded(r['path'], r['info'])
-                if self.dvr:
+                r['dvr'] = self.dvr or convert.is_dvr_fields(r['path'], r['info'])
+                if r['dvr']:
                     r['stamps'] = looks.stamps(r['path'])
                 prev = self.ledger.lookup(r['fp'])
                 r['state'] = 'old' if prev else 'new'
@@ -636,7 +641,9 @@ class ClipTab:
         new = sum(r['state'] == 'new' for r in self.rows.values())
         old = sum(r['state'] == 'old' for r in self.rows.values())
         self.helix.set_state('idle')
-        self.heading.set(f'{new} new clip{"s" if new != 1 else ""} ready' if new else 'Nothing new on this card')
+        dv = sum(r['state'] == 'new' and bool(r.get('dvr')) for r in self.rows.values())
+        self.heading.set((f'{new} new clip{"s" if new != 1 else ""} ready' if new else 'Nothing new on this card')
+                         + (f' · {dv} from your Mini DVR' if dv and not self.dvr else ''))
         self.sub.set(f'{old} already imported - left unticked.' if old else 'Press '
                      + ('Import' if self.dvr else 'Convert') + ' when you are ready.')
         self.bar.set(0)
@@ -649,13 +656,13 @@ class ClipTab:
 
     def _type(self, r):
         i = r['info'] or {}
-        if self.dvr:
+        if r.get('dvr'):
             st = r['stamps'] or []
             used = sorted({p for _, p in st})
-            mode = '50p' if looks.fps_mode(st) else '25p'
             if not st:
-                return 'AVI'
-            return f'{mode} · look {used[0]}' if len(used) == 1 else f'{mode} · {len(used)} looks'
+                return '▶ Mini DVR'
+            mode = '50p' if looks.fps_mode(st) else '25p'
+            return f'▶ Mini DVR {mode}'
         if not i.get('video'):
             return 'audio'
         fmt = {'mpegts': 'AVCHD', 'mov,mp4,m4a,3gp,3g2,mj2': 'MP4/MOV', 'avi': 'AVI', 'dv': 'DV',
@@ -672,7 +679,8 @@ class ClipTab:
         if r['state'] == 'old':
             status = 'Imported ' + datetime.datetime.fromisoformat(r['prev']['when']).strftime('%d %b')
         when = r['when'].strftime('%d %b %y  %H:%M') if r['when'] else '— no date'
-        self.tree.item(iid, image=self.box_on if r['tick'] else self.box_off, tags=(r['state'],),
+        self.tree.item(iid, image=self.box_on if r['tick'] else self.box_off,
+                       tags=(r['state'],) + (('dvr',) if r.get('dvr') and r['state'] == 'new' else ()),
                        values=(os.path.basename(r['path']), when, hms(i.get('duration')), self._type(r),
                                ROT_NAMES[r['rotate']], library.human_size(os.path.getsize(r['path'])), status))
         self._count()
@@ -733,11 +741,11 @@ class ClipTab:
             txt = 'Reading the clip…'
         else:
             name = self._out_name(r)
-            if self.dvr:
+            if r.get('dvr'):
                 st = r['stamps'] or []
                 segs = looks.segments([p for _, p in st]) if self.use_looks.get() else []
                 used = ', '.join(f'{p} {looks.LOOKS[p][0]}' for p in sorted({p for _, _, p in segs})) or 'none'
-                txt = (f"Weave both fields → {'50p smooth' if looks.fps_mode(st) else '25p cinematic'} "
+                txt = (f"Mini DVR clip · weave both fields → {'50p smooth' if looks.fps_mode(st) else '25p cinematic'} "
                        f"(as recorded) · {'TV-style edge crop' if self.overscan.get() else 'full frame'} → "
                        f"768×576 4:3\nLooks: {used if self.use_looks.get() else 'off (original colours)'}"
                        f"{' · ' + ROT_NAMES[r['rotate']] if r['rotate'] != '0°' else ''}\n"
@@ -746,8 +754,7 @@ class ClipTab:
             else:
                 txt = convert.describe(r['info'], self.fmt.get(), self.quality.get(), r['rotate'],
                                        self.deint.get(), r['path']).replace('\n', '  ·  ')
-                txt += (f'\nSaved as: {name}_GR8DVR.mp4' if convert.is_dvr_fields(r['path'], r['info'])
-                        else f'\nSaved as: {name}{convert.FORMATS[self.fmt.get()][0]}')
+                txt += f'\nSaved as: {name}{convert.FORMATS[self.fmt.get()][0]}'
         self.explain.configure(state='normal')
         self.explain.delete('1.0', 'end')
         self.explain.insert('1.0', txt)
@@ -784,7 +791,7 @@ class ClipTab:
             info = r['info'] or convert.probe(r['path']) or {'duration': 0}
             t = self.slider.value * max(0.0, (info.get('duration') or 0) - 0.2)
             size = None
-            if self.dvr:
+            if r.get('dvr'):
                 size = '256:192' if r['rotate'] in ('0°', '180°') else '144:192'
             png = (convert.preview_png(r['path'], t, r['rotate'], width=256, info=info, size=size)
                    if info.get('video') else b'')
@@ -813,7 +820,7 @@ class ClipTab:
         if not r:
             return
         vf = convert.ROTATIONS.get(r['rotate']) or 'null'
-        if self.dvr:
+        if r.get('dvr'):
             vf = 'scale=768:576,' + vf
         if shutil.which('ffplay'):
             subprocess.Popen(['ffplay', '-hide_banner', '-loglevel', 'error', '-autoexit', '-window_title',
@@ -871,7 +878,7 @@ class ClipTab:
             prog(0)
             try:
                 stem = self._out_name(r)
-                if self.dvr or convert.is_dvr_fields(r['path'], r.get('info')):
+                if r.get('dvr'):
                     import re
                     sys.stdout = _QWriter(lambda s: [prog(int(m) / 100 * 0.8) for m in re.findall(r'(\d+)%', s)[-1:]])
                     try:
@@ -1168,7 +1175,7 @@ class FirmwareTab:
         r.pack(fill='x')
         w.Dropdown(r, self.preset, [self._look_label(n) for n in range(9)], width=30,
                    command=self._look_desc).pack(side='left')
-        w.Help(r, 'Looks are colour styles. They are applied when you import with GR8DVR (Mini DVR Import tab), '
+        w.Help(r, 'Looks are colour styles. They are applied when you import with GR8DVR (Import & Convert tab), '
                   'so the raw recording always stays clean - you can turn looks off at import time.').pack(
             side='left', padx=6)
         self.look_desc = tk.Label(g, text='', anchor='w', fg=DIM, wraplength=520, justify='left')

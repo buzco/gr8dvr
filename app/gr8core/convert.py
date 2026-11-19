@@ -140,8 +140,8 @@ def describe(info, fmt, quality, rotate, deinterlace, path=''):
         return 'Reading the clip…'
     if is_dvr_fields(path, info):
         return ('Mini DVR recording (one half-picture per frame).\n'
-                'Converted like the Mini DVR Import tab: both fields woven to full 576/480 lines, real speed, '
-                'sound in sync, your looks applied.\nOutput: MP4 · H.264 (the format choice does not apply).')
+                'Both fields woven to full 576/480 lines, real speed, sound in sync, your looks applied.\n'
+                'Output: MP4 · H.264 (the format choice does not apply).')
     ext, vargs, _, desc = FORMATS[fmt]
     lines = []
     if info.get('video'):

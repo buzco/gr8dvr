@@ -23,9 +23,10 @@ GR8DVR is new and not code-signed. **Windows:** "unrecognised app" → More info
 - **Per-frame look stamps**: the importer grades each part of a clip with the look you picked while filming
 
 ## The GR8DVR app (Windows + macOS)
-- **Media Converter**: AVCHD (.MTS), DV, AVI, MOV, MKV, VOB… → MP4 / H.265 / ProRes / GIF / MP3, with preview, rotate,
-  date-based file names and an "already imported" memory.
-- **Mini DVR Import**: finds the card by itself, weaves 50i → smooth 50p or cinematic 25p, edge crop, looks → H.264 MP4.
+- **Import & Convert**: one tab for everything. Finds Mini DVR cards, AVCHD camcorders and camera cards by itself;
+  AVCHD (.MTS), DV, AVI, MOV, MKV, VOB… → MP4 / H.265 / ProRes / GIF / MP3 with preview, rotate, date-based names and an
+  "already imported" memory. Mini DVR clips are recognised (▶ Mini DVR) and woven 50i → smooth 50p or cinematic 25p,
+  with edge crop and looks → H.264 MP4.
 - **Mini DVR Firmware Builder**: **Try first** (runs once from RAM, nothing flashed) · **Install** · **Restore stock**.
   The app includes Eachine's original ProDVR `CRESFW.BIN` (unmodified, © Eachine, see `NOTICES.txt`) and applies
   GR8DVR's patches to it on your computer, checking every byte. Nothing to download separately.
