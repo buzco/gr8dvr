@@ -75,8 +75,7 @@ def scan(kinds=('avchd', 'camera'), extra=()):
                 clips += glob.glob(os.path.join(root, p))
             if k == 'dvr':
                 clips = [c for c in clips if os.path.basename(c).upper().startswith('PICT')]
-            clips = sorted({os.path.normcase(os.path.abspath(c)): c for c in clips
-                            if os.path.getsize(c) > 64 * 1024}.values())
+            clips = sorted({os.path.normcase(os.path.abspath(c)): c for c in clips if _real_clip(c)}.values())
             if clips:
                 key = (k, os.path.normcase(os.path.abspath(root)))
                 if key not in seen:
@@ -86,11 +85,34 @@ def scan(kinds=('avchd', 'camera'), extra=()):
     return found
 
 
+SKIP_DIRS = {'system volume information', '$recycle.bin', '.trashes', '.spotlight-v100', '.fseventsd'}
+
+
+def _real_clip(path):
+    """Skip macOS '._' shadow files, hidden files and stubs too small to hold video."""
+    n = os.path.basename(path)
+    try:
+        return not n.startswith('.') and os.path.getsize(path) > 64 * 1024
+    except OSError:
+        return False
+
+
 def folder_clips(folder, exts):
     out = []
-    for a, _, ns in os.walk(folder):
-        out += [os.path.join(a, n) for n in sorted(ns) if n.lower().endswith(exts)]
+    for a, ds, ns in os.walk(folder):
+        ds[:] = sorted(d for d in ds if not d.startswith('.') and d.lower() not in SKIP_DIRS)
+        out += [os.path.join(a, n) for n in sorted(ns) if n.lower().endswith(exts) and _real_clip(os.path.join(a, n))]
     return out
+
+
+def log(msg):
+    """Append a line to GR8DVR.log in the settings folder (for bug reports). Never raises."""
+    try:
+        os.makedirs(APPDIR, exist_ok=True)
+        with open(os.path.join(APPDIR, 'GR8DVR.log'), 'a', encoding='utf-8') as f:
+            f.write(f'{datetime.datetime.now().isoformat(timespec="seconds")}  {msg}\n')
+    except OSError:
+        pass
 
 
 # ------------------------------------------------------------ already imported?

@@ -24,14 +24,26 @@ FORMATS = {   # label: (extension, video args, audio args, description)
 QUALITY = {'High': '16', 'Medium': '20', 'Small': '24'}
 
 
-def probe(path):
-    """Duration, size, interlacing, rotation of the first video stream."""
-    r = procs.run(['ffprobe', '-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', path],
-                  capture_output=True, text=True)
+class ProbeError(Exception):
+    pass
+
+
+def probe(path, timeout=120):
+    """Duration, size, interlacing, rotation of the first video stream. Raises ProbeError with the reason."""
     try:
-        j = json.loads(r.stdout)
+        r = procs.run(['ffprobe', '-v', 'error', '-print_format', 'json', '-show_format', '-show_streams', path],
+                      capture_output=True, timeout=timeout)
+    except FileNotFoundError:
+        raise ProbeError('ffprobe (part of GR8DVR) could not be started')
+    except procs._sp.TimeoutExpired:
+        raise ProbeError(f'took longer than {timeout} s to open (cloud file still downloading?)')
+    try:
+        j = json.loads(r.stdout.decode('utf-8', 'replace') or '{}')
     except ValueError:
-        return None
+        j = {}
+    if not j.get('streams'):
+        msg = (r.stderr or b'').decode('utf-8', 'replace').strip().splitlines()
+        raise ProbeError(msg[-1] if msg else 'no audio or video found in this file')
     v = next((s for s in j.get('streams', []) if s.get('codec_type') == 'video'), None)
     fmt = j.get('format', {})
     dur = float(fmt.get('duration', 0) or 0)

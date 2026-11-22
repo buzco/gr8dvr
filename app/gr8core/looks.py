@@ -22,25 +22,34 @@ FULL = 'scale=768:576:flags=lanczos,setsar=1'
 def stamps(avi):
     """(fps_mode, preset) per recorded field from the JPEG COM stamp: "B5n" = 50p/60p, "B2n" = 25p/30p,
     legacy "BZn" = 50p; unstamped = (1, 0)."""
+    import os
+    size = os.path.getsize(avi)
     with open(avi, 'rb') as f:
-        d = f.read()
-    movi = d.find(b'movi') - 4
-    i = d.rfind(b'idx1')
-    if movi < 0 or i < 0:
-        return []
-    n = struct.unpack('<I', d[i + 4:i + 8])[0] // 16
-    out = []
-    for k in range(n):
-        cid, _, off, sz = struct.unpack('<4sIII', d[i + 8 + 16 * k:i + 24 + 16 * k])
-        if cid != b'00dc':
-            continue
-        fr = d[movi + off + 8:movi + off + 8 + min(sz, 1024)]
-        c = fr.find(b'\xff\xfe')
-        t = fr[c + 4:c + 7] if c >= 0 else b''
-        if len(t) == 3 and t[:1] == b'B' and 0 <= t[2] - 48 <= 8:
-            out.append((0 if t[1:2] == b'2' else 1, t[2] - 48))
-        else:
-            out.append((1, 0))
+        head = f.read(1 << 16)
+        movi = head.find(b'movi') - 4
+        tail_n = min(size, 8 << 20)
+        f.seek(size - tail_n)
+        tail = f.read()
+        i = tail.rfind(b'idx1')
+        if movi < 0 or i < 0:
+            return []
+        n = struct.unpack('<I', tail[i + 4:i + 8])[0] // 16
+        if i + 8 + 16 * n > len(tail):
+            f.seek(size - tail_n + i)
+            tail, i = f.read(8 + 16 * n), 0
+        out = []
+        for k in range(n):
+            cid, _, off, sz = struct.unpack('<4sIII', tail[i + 8 + 16 * k:i + 24 + 16 * k])
+            if cid != b'00dc':
+                continue
+            f.seek(movi + off + 8)
+            fr = f.read(min(sz, 1024))
+            c = fr.find(b'\xff\xfe')
+            t = fr[c + 4:c + 7] if c >= 0 else b''
+            if len(t) == 3 and t[:1] == b'B' and 0 <= t[2] - 48 <= 8:
+                out.append((0 if t[1:2] == b'2' else 1, t[2] - 48))
+            else:
+                out.append((1, 0))
     return out
 
 

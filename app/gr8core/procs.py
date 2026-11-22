@@ -21,12 +21,16 @@ def Popen(*a, **k):
     return p
 
 
-def run(cmd, check=False, capture_output=False, input=None, **k):
+def run(cmd, check=False, capture_output=False, input=None, timeout=None, **k):
     if capture_output:
         k['stdout'], k['stderr'] = PIPE, PIPE
     p = Popen(cmd, stdin=PIPE if input is not None else None, **k)
     try:
-        out, err = p.communicate(input)
+        out, err = p.communicate(input, timeout=timeout)
+    except _sp.TimeoutExpired:
+        p.kill()
+        p.communicate()
+        raise
     finally:
         _live.discard(p)
     if cancelled:

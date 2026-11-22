@@ -302,6 +302,12 @@ class Dropdown(tk.Frame):
         for c in self.choices:
             self.menu.add_command(label=c, command=lambda c=c: self._pick(c))
 
+    def set_choices(self, choices):
+        self.choices = list(choices)
+        self.menu.delete(0, 'end')
+        for c in self.choices:
+            self.menu.add_command(label=c, command=lambda c=c: self._pick(c))
+
     def _pick(self, c):
         self.var.set(c)
         if self.command:

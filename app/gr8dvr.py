@@ -188,7 +188,19 @@ class App:
         self.builder = FirmwareTab(self, self.tabs.add('Mini DVR Firmware Builder'))
         self.about = AboutTab(self, self.tabs.add('About'))
         self._footer()
+        self._fit()
         root.after(100, self._poll)
+
+    def _fit(self):
+        """Grow the window to what the widgets need (Windows fonts / display scaling make them taller),
+        so the preview player is never cut off; never taller than the screen."""
+        r = self.root
+        r.update_idletasks()
+        w_, h_ = max(1000, r.winfo_reqwidth()), max(720, r.winfo_reqheight())
+        h_ = min(h_, r.winfo_screenheight() - 80)
+        w_ = min(w_, r.winfo_screenwidth() - 20)
+        r.geometry(f'{w_}x{h_}')
+        r.minsize(min(w_, 960), min(h_, r.winfo_screenheight() - 80))
 
     # --- chrome
     def _menu(self):
@@ -332,7 +344,8 @@ class ClipTab:
         self.keep576 = tk.BooleanVar(value=False)
         self.heading = tk.StringVar(value='Looking for your card…')
         self.sub = tk.StringVar(value='')
-        self.source_txt = tk.StringVar(value='')
+        self.source_txt = tk.StringVar(value='Looking…')
+        self.sources, self.src_key, self.want_key, self.cache = [], 'all', None, {}
         self.status = tk.StringVar(value='')
         self.dest = tk.StringVar()
         self._dest_update()
@@ -362,18 +375,21 @@ class ClipTab:
         g.pack(fill='x', pady=(4, 0))
         g.grid_columnconfigure(1, weight=1)
         tk.Label(g, text='From:', font=F['bold']).grid(row=0, column=0, sticky='w', padx=(0, 10))
-        tk.Label(g, textvariable=self.source_txt, anchor='w', width=10).grid(row=0, column=1, sticky='ew')
+        self.src_dd = w.Dropdown(g, self.source_txt, [], width=10, command=self._pick_source)
+        self.src_dd.grid(row=0, column=1, sticky='ew')
         r = tk.Frame(g)
         r.grid(row=0, column=2, sticky='e')
         w.Button(r, 'Rescan', self.rescan).pack(side='left')
         w.Button(r, 'Pick folder…', self.pick_folder, width=90).pack(side='left', padx=(4, 0))
         if not self.dvr:
             w.Button(r, 'Add files…', self.add_files).pack(side='left', padx=(4, 0))
-        w.Help(r, 'GR8DVR finds your card by itself: '
+        w.Help(r, 'Pick where the clips come from in the list on the left: everything GR8DVR found, '
+                  'one card, or a folder you picked.\n\nGR8DVR finds your card by itself: '
                   + ('Mini DVR cards (PICT*.AVI). ' if self.dvr else
                      'Mini DVR cards (PICT*.AVI), AVCHD camcorders (PRIVATE\\AVCHD) and camera cards (DCIM). ')
                   + 'Plug the card or camcorder in and it shows up within a few seconds.\n\n'
-                  'Somewhere else? Use Pick folder… - GR8DVR remembers it next time.').pack(side='left', padx=(6, 0))
+                  'Somewhere else (a backup, Google Drive, a USB disk)? Use Pick folder… - it is shown on '
+                  'its own, and GR8DVR remembers it for next time.').pack(side='left', padx=(6, 0))
         tk.Label(g, text='Save to:', font=F['bold']).grid(row=1, column=0, sticky='w', pady=(4, 0))
         w.Field(g, self.dest, width=10).grid(row=1, column=1, sticky='ew', pady=(4, 0))
         r = tk.Frame(g)
@@ -476,9 +492,9 @@ class ClipTab:
         w.Button(r, 'Tick new', self.tick_new).pack(side='left')
         w.Button(r, 'Tick all', lambda: self.tick_all(True)).pack(side='left', padx=4)
         w.Button(r, 'Untick all', lambda: self.tick_all(False)).pack(side='left')
-        w.Help(r, 'GR8DVR remembers every clip it has converted (by its content, not its name). Clips you '
-                  'already imported show "Imported" and are NOT ticked, so you never convert the same clip '
-                  'twice. Tick them yourself if you want them again.').pack(side='left', padx=6)
+        w.Help(r, 'Nothing is ticked at the start - tick the clips you want, or press Tick new for every clip '
+                  'you haven\'t converted yet.\n\nGR8DVR remembers every clip it has converted (by its content, '
+                  'not its name): those show "Imported", so you never convert the same clip twice by accident.').pack(side='left', padx=6)
         cols = ('clip', 'rec', 'len', 'type', 'orient', 'size', 'status')
         self.tree = ttk.Treeview(g, columns=cols, show='tree headings', selectmode='extended', height=4)
         heads = {'#0': ('', 30), 'clip': ('Clip', 90), 'rec': ('Recorded', 108), 'len': ('Length', 54),
@@ -541,7 +557,8 @@ class ClipTab:
         d = filedialog.askdirectory(title='Folder with clips')
         if d:
             d = os.path.normpath(d)
-            self.extra = [p for p in self.extra if p != d][-2:] + [d]
+            self.extra = [p for p in self.extra if p != d][-4:] + [d]
+            self.want_key = ('folder', os.path.normcase(d))
             self._remember()
             self.rescan()
 
@@ -551,11 +568,14 @@ class ClipTab:
                                                                         ('All files', '*.*')])
         if ps:
             self.manual += [p for p in ps if p not in self.manual]
+            self.want_key = ('files',)
             self.rescan()
 
     def rescan(self):
         if self.busy:
             return
+        from gr8core import procs
+        procs.reset()
         self.scan_id += 1
         sid = self.scan_id
         self.helix.set_state('scan')
@@ -564,41 +584,85 @@ class ClipTab:
         threading.Thread(target=self._scan, args=(sid,), daemon=True).start()
 
     def _scan(self, sid):
+        """Collect sources: each card (by kind) and each picked folder. A clip belongs to the first source
+        that claims it, so one card never shows up three times."""
         kinds = ('dvr',) if self.dvr else ('dvr', 'avchd', 'camera')
         try:
-            srcs = library.scan(kinds)
-        except Exception:                                    # noqa: BLE001
-            srcs = []
-        clips, labels = [], [s['label'] for s in srcs]
-        for s in srcs:
-            clips += s['clips']
+            found = library.scan(kinds)
+        except Exception as e:                               # noqa: BLE001
+            library.log(f'scan failed: {e!r}')
+            found = []
+        raw = [(('card', s['kind'], os.path.normcase(s['root'])), s['label'], s['clips']) for s in found]
         for p in self.extra:
-            fc = (importer.find_clips(p) if self.dvr else library.folder_clips(p, convert.VIDEO_EXT))
-            if fc:
-                labels.append(f'folder {p}')
-                clips += fc
+            try:
+                fc = importer.find_clips(p) if self.dvr else library.folder_clips(p, convert.VIDEO_EXT)
+            except OSError as e:
+                library.log(f'folder {p}: {e!r}')
+                fc = []
+            raw.append((('folder', os.path.normcase(p)), f'Folder {p}', fc))
         if self.manual:
-            labels.append(f'{len(self.manual)} added file(s)')
-            clips += self.manual
-        hint = ''
-        seen, uniq = set(), []
-        for c in clips:
-            k = os.path.normcase(os.path.abspath(c))
-            if k not in seen:
-                seen.add(k); uniq.append(c)
-        self.app.post(self._list, sid, uniq, labels, hint)
+            raw.append((('files',), 'Added files', [p for p in self.manual if os.path.exists(p)]))
+        claimed, sources = set(), []
+        for key, label, clips in raw:
+            mine = []
+            for c in clips:
+                k = os.path.normcase(os.path.abspath(c))
+                if k not in claimed:
+                    claimed.add(k)
+                    mine.append(c)
+            if mine or key[0] == 'folder':
+                sources.append({'key': key, 'label': f'{label}  ·  {len(mine)} clip{"s" if len(mine) != 1 else ""}',
+                                'clips': mine})
+        self.app.post(self._list, sid, sources)
 
-    def _list(self, sid, clips, labels, hint):
+    def _src_label(self, key):
+        if key == 'all':
+            n = sum(len(s['clips']) for s in self.sources)
+            return f'Everything found  ·  {n} clip{"s" if n != 1 else ""}'
+        return next((s['label'] for s in self.sources if s['key'] == key), '')
+
+    def _pick_source(self):
+        if self.busy:
+            self.source_txt.set(self._src_label(self.src_key))
+            return
+        from gr8core import procs
+        procs.reset()
+        lab = self.source_txt.get()
+        key = 'all'
+        for s in self.sources:
+            if s['label'] == lab:
+                key = s['key']
+        if key != self.src_key:
+            self.src_key = key
+            self.scan_id += 1
+            self._list(self.scan_id, self.sources)
+
+    def _list(self, sid, sources):
         if sid != self.scan_id:
             return
-        self.source_txt.set(('  ·  '.join(labels) if labels else
-                             'No card found - plug in your SD card / camcorder, or use Pick folder…') + hint)
+        self.sources = sources
+        keys = [s['key'] for s in sources]
+        if self.want_key in keys:
+            self.src_key = self.want_key
+        elif self.src_key not in keys:
+            self.src_key = 'all'
+        self.want_key = None
+        if sources:
+            self.src_dd.set_choices([self._src_label('all')] + [s['label'] for s in sources])
+            self.source_txt.set(self._src_label(self.src_key))
+        else:
+            self.src_dd.set_choices([])
+            self.source_txt.set('No card found - plug in your SD card / camcorder, or use Pick folder…')
+        clips = [c for s in sources if self.src_key in ('all', s['key']) for c in s['clips']]
         self.tree.delete(*self.tree.get_children())
         self.rows = {}
         for c in clips:
+            try:
+                sz = library.human_size(os.path.getsize(c))
+            except OSError:
+                sz = '?'
             iid = self.tree.insert('', 'end', image=self.box_off, values=(os.path.basename(c), '', '', '', 'Normal',
-                                                                 library.human_size(os.path.getsize(c)),
-                                                                 'Checking…'))
+                                                                 sz, 'Checking…'))
             self.rows[iid] = {'path': c, 'info': None, 'fp': None, 'when': None, 'rotate': '0°', 'tick': False,
                               'state': 'checking', 'stamps': None}
         if not clips:
@@ -619,19 +683,35 @@ class ClipTab:
             self.app.post(self.sub.set, f'Checking {name} ({i} of {n})')
             self.app.post(self.bar.set, i / n)
             self.helix.progress = i / n
+            step = 'opening the file'
             try:
-                r['fp'] = library.fingerprint(r['path'])
-                r['info'] = convert.probe(r['path']) or {'duration': 0, 'video': False}
-                r['when'] = library.recorded(r['path'], r['info'])
-                r['dvr'] = self.dvr or convert.is_dvr_fields(r['path'], r['info'])
-                if r['dvr']:
-                    r['stamps'] = looks.stamps(r['path'])
+                st = os.stat(r['path'])
+                sig = (os.path.normcase(r['path']), st.st_size, st.st_mtime)
+                hit = self.cache.get(sig)
+                if hit:
+                    r.update(hit)
+                else:
+                    step = 'reading the file'
+                    r['fp'] = library.fingerprint(r['path'])
+                    step = 'reading the video (ffprobe)'
+                    r['info'] = convert.probe(r['path'])
+                    r['when'] = library.recorded(r['path'], r['info'])
+                    r['dvr'] = self.dvr or convert.is_dvr_fields(r['path'], r['info'])
+                    if r['dvr']:
+                        step = 'reading the look stamps'
+                        try:
+                            r['stamps'] = looks.stamps(r['path'])
+                        except Exception as e:               # noqa: BLE001 - looks are optional
+                            library.log(f"stamps {r['path']}: {e!r}")
+                            r['stamps'] = []
+                    self.cache[sig] = {k: r[k] for k in ('fp', 'info', 'when', 'dvr', 'stamps')}
                 prev = self.ledger.lookup(r['fp'])
                 r['state'] = 'old' if prev else 'new'
                 r['prev'] = prev
-                r['tick'] = not prev
+                r['tick'] = False
             except Exception as e:                           # noqa: BLE001
-                r['state'], r['err'] = 'fail', str(e)
+                r['state'], r['err'] = 'fail', f'{step}: {e}' if str(e) else f'{step}: {type(e).__name__}'
+                library.log(f"unreadable {r['path']}: {r['err']!r}")
             self.app.post(self._row, sid, iid)
         self.app.post(self._checked, sid)
 
@@ -644,12 +724,14 @@ class ClipTab:
         dv = sum(r['state'] == 'new' and bool(r.get('dvr')) for r in self.rows.values())
         self.heading.set((f'{new} new clip{"s" if new != 1 else ""} ready' if new else 'Nothing new on this card')
                          + (f' · {dv} from your Mini DVR' if dv and not self.dvr else ''))
-        self.sub.set(f'{old} already imported - left unticked.' if old else 'Press '
-                     + ('Import' if self.dvr else 'Convert') + ' when you are ready.')
+        bad = sum(r['state'] == 'fail' for r in self.rows.values())
+        self.sub.set('Tick the clips you want, then press Convert.'
+                     + (f'  {old} already imported.' if old else '')
+                     + (f'  {bad} unreadable - click one to see why.' if bad else ''))
         self.bar.set(0)
         self.helix.progress = 0
         if not self.tree.selection() and self.rows:
-            first = next((i for i, r in self.rows.items() if r['tick']), next(iter(self.rows)))
+            first = next(iter(self.rows))
             self.tree.selection_set(first)
             self.tree.see(first)
         self._count()
@@ -737,6 +819,10 @@ class ClipTab:
         iid, r = self.current()
         if not r:
             txt = 'Click a clip above to see exactly how it will be converted.'
+        elif r['state'] == 'fail':
+            txt = (f"GR8DVR couldn't read this clip - {r.get('err', 'unknown reason')}.\n"
+                   'Press Rescan to try again. Still failing? Send the GR8DVR.log file from '
+                   f'{library.APPDIR} to the Buzco support email.')
         elif not r['info']:
             txt = 'Reading the clip…'
         else:
@@ -788,7 +874,10 @@ class ClipTab:
         self.preview_job = token
 
         def work():
-            info = r['info'] or convert.probe(r['path']) or {'duration': 0}
+            try:
+                info = r['info'] or convert.probe(r['path'])
+            except Exception:                                # noqa: BLE001
+                info = {'duration': 0}
             t = self.slider.value * max(0.0, (info.get('duration') or 0) - 0.2)
             size = None
             if r.get('dvr'):
@@ -1169,17 +1258,30 @@ class FirmwareTab:
         self.title.configure(text='Your start-up settings')
         self.text('Choose what the DVR does right after you switch it on. You can always change it with the '
                   'buttons while filming - this only sets the starting point.')
-        g = w.group(self.body, 'Start with this look')
+        g = w.group(self.body, 'Start with this look  -  click one')
         g.pack(fill='x', pady=(0, 8))
+        grid = tk.Frame(g)
+        grid.pack(anchor='w')
+        if not getattr(self, 'look_imgs', None):
+            self.look_imgs = [tk.PhotoImage(file=asset(f'look_{n}.png')) for n in range(9)]
+        self.look_tiles = []
+        for n in range(9):
+            t = tk.Frame(grid, bg=FACE, padx=3, pady=3, cursor='hand2')
+            t.grid(row=n // 5, column=n % 5, padx=(0, 6), pady=(0, 4), sticky='n')
+            im = tk.Label(t, image=self.look_imgs[n], bd=0, cursor='hand2')
+            im.pack()
+            cap = tk.Label(t, text=f'{n}  {looks.LOOKS[n][0]}', anchor='w', cursor='hand2')
+            cap.pack(fill='x')
+            for wdg in (t, im, cap):
+                wdg.bind('<Button-1>', lambda e, n=n: self._pick_look(n))
+            self.look_tiles.append((t, cap))
         r = tk.Frame(g)
-        r.pack(fill='x')
-        w.Dropdown(r, self.preset, [self._look_label(n) for n in range(9)], width=30,
-                   command=self._look_desc).pack(side='left')
+        r.pack(fill='x', pady=(2, 0))
+        self.look_desc = tk.Label(r, text='', anchor='w', fg=DIM, wraplength=600, justify='left')
+        self.look_desc.pack(side='left', fill='x', expand=True)
         w.Help(r, 'Looks are colour styles. They are applied when you import with GR8DVR (Import & Convert tab), '
-                  'so the raw recording always stays clean - you can turn looks off at import time.').pack(
-            side='left', padx=6)
-        self.look_desc = tk.Label(g, text='', anchor='w', fg=DIM, wraplength=520, justify='left')
-        self.look_desc.pack(fill='x', pady=(4, 0))
+                  'so the raw recording always stays clean - you can turn looks off at import time. '
+                  'On the DVR, the \u25b6 button cycles through all 9 while you film.').pack(side='right', padx=6)
         self._look_desc()
         g = w.group(self.body, 'Start with this frame rate')
         g.pack(fill='x')
@@ -1192,9 +1294,18 @@ class FirmwareTab:
             w.Check(r, t, self.fps, radio_value=v).pack(side='left')
             w.Help(r, tip).pack(side='left', padx=6)
 
+    def _pick_look(self, n):
+        self.preset.set(self._look_label(n))
+        sound.play('tick')
+        self._look_desc()
+
     def _look_desc(self):
         n = int(self.preset.get().split()[0])
-        self.look_desc.configure(text=looks.LOOKS[n][1])
+        self.look_desc.configure(text=f'{n}  {looks.LOOKS[n][0]}: {looks.LOOKS[n][1]}')
+        for k, (t, cap) in enumerate(getattr(self, 'look_tiles', [])):
+            t.configure(bg=ACC if k == n else FACE)
+            cap.configure(bg=ACC if k == n else FACE, fg=HI if k == n else DK,
+                          font=F['bold'] if k == n else F['ui'])
 
     def s_card(self):
         self.title.configure(text='The SD card')
