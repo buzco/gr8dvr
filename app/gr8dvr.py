@@ -1067,6 +1067,7 @@ class FirmwareTab:
         self.card = tk.StringVar(value='')
         self.preset = tk.StringVar(value=self._look_label(0))
         self.fps = tk.IntVar(value=1)
+        self.ntsc = tk.IntVar(value=0)
         self.mode = tk.StringVar(value='try')
         self.agree = tk.BooleanVar(value=False)
         self.step = 0
@@ -1288,11 +1289,23 @@ class FirmwareTab:
                   'so the raw recording always stays clean - you can turn looks off at import time. '
                   'On the DVR, the \u25b6 button cycles through all 9 while you film.').pack(side='right', padx=6)
         self._look_desc()
-        g = w.group(self.body, 'Start with this frame rate')
+        g = w.group(self.body, 'Your camcorder & start-up frame rate')
         g.pack(fill='x')
-        for v, t, tip in ((1, '60 fps smooth (50 fields/s PAL) - recommended',
+        r = tk.Frame(g)
+        r.pack(fill='x', pady=(0, 3))
+        tk.Label(r, text='Camcorder:').pack(side='left', padx=(0, 6))
+        w.Check(r, 'PAL (Europe, Africa, Asia, Australia)', self.ntsc, radio_value=0).pack(side='left')
+        w.Check(r, 'NTSC (Americas, Japan, Korea) - experimental', self.ntsc, radio_value=1).pack(side='left',
+                                                                                                padx=(8, 0))
+        w.Help(r, 'Pick the TV standard of the camcorder you record from (it is printed on the camcorder or in its '
+                  'manual; 50 Hz = PAL, 60 Hz = NTSC).\n\nNTSC sends 240 lines per half-picture instead of 288. '
+                  'The NTSC build records them as they are; the PAL build would stretch them. NTSC is new and only '
+                  'emulator-tested so far - please report how it works for you (About tab).\n\nAlready recorded '
+                  'NTSC with the PAL build? Import & Convert still converts it, just a little softer.'
+               ).pack(side='left', padx=6)
+        for v, t, tip in ((1, '60 fps smooth (50 on PAL) - recommended',
                            'Every field becomes its own frame: motion looks exactly like the camcorder.'),
-                          (0, '30 fps cinematic (25 frames/s PAL)', 'Fields are combined into full frames: a calmer, '
+                          (0, '30 fps cinematic (25 on PAL)', 'Fields are combined into full frames: a calmer, '
                            'film-like look with half the frames.')):
             r = tk.Frame(g)
             r.pack(fill='x', pady=1)
@@ -1337,7 +1350,8 @@ class FirmwareTab:
     def s_write(self):
         self.title.configure(text='Try it or install it')
         self.text(f'Start-up look: {self.preset.get().strip()}    ·    Frame rate: '
-                  f'{"60 fps smooth" if self.fps.get() else "30 fps cinematic"}\nCard: {self.card.get()}')
+                  f'{"60 fps smooth" if self.fps.get() else "30 fps cinematic"} · '
+                  f'{"NTSC (experimental)" if self.ntsc.get() else "PAL"}\nCard: {self.card.get()}')
         opts = (('try', 'Try first (recommended)', 'Runs GR8DVR once from memory. Nothing is installed - switch the '
                  'DVR off and on again and you are back to normal. Perfect to test.'),
                 ('install', 'Install permanently', 'Flashes GR8DVR into the DVR. It then starts with GR8DVR every '
@@ -1364,7 +1378,8 @@ class FirmwareTab:
         mode = self.mode.get()
         n = int(self.preset.get().split()[0])
         try:
-            self.name = firmware.write(self.card.get(), self.vendor.get(), mode, preset=n, fps=self.fps.get())
+            self.name = firmware.write(self.card.get(), self.vendor.get(), mode, preset=n, fps=self.fps.get(),
+                                       ntsc=bool(self.ntsc.get()))
         except firmware.FirmwareError as e:
             return messagebox.showerror('GR8DVR', str(e))
         except OSError as e:

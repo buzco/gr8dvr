@@ -30,7 +30,7 @@ def check_vendor(path):
     return data
 
 
-def build(vendor_bytes, preset=None, fps=None):
+def build(vendor_bytes, preset=None, fps=None, ntsc=False):
     """Return (adjust_image, cresfw_image) for GR8DVR with the user's power-on defaults
     (preset 0-8, fps 1 = 50p/60p or 0 = 25p/30p). The released build is verified first, then only the two
     default bytes are changed."""
@@ -43,6 +43,11 @@ def build(vendor_bytes, preset=None, fps=None):
     adjust, cres = bytes(ram), bytes(ram[:fw['vendor_size']])
     if hashlib.sha256(adjust).hexdigest() != fw['adjust_sha256'] or hashlib.sha256(cres).hexdigest() != fw['cresfw_sha256']:
         raise FirmwareError('Build check failed (result does not match the released GR8DVR). Nothing was written.')
+    if ntsc:                                             # NTSC camcorders: D1 = 704x240 instead of 704x288
+        for off, old, new in fw['ntsc']:
+            if ram[off:off + len(old) // 2].hex() != old:
+                raise FirmwareError(f'NTSC change does not fit at 0x{off:x}. Nothing was written.')
+            ram[off:off + len(new) // 2] = bytes.fromhex(new)
     cfg = fw['config']
     for key, val, lo, hi in (('preset', preset, 0, 8), ('fps', fps, 0, 1)):
         if val is None:
@@ -61,7 +66,7 @@ def _clean_card(card):
                 os.remove(p)
 
 
-def write(card, vendor_path, mode, preset=None, fps=None):
+def write(card, vendor_path, mode, preset=None, fps=None, ntsc=False):
     """mode: 'try' (ADJUST.BIN, runs from RAM once, nothing flashed), 'install' (CRESFW.BIN, permanent),
     'restore' (Eachine original as CRESFW.BIN). Returns the file name written."""
     if not os.path.isdir(card):
@@ -70,7 +75,7 @@ def write(card, vendor_path, mode, preset=None, fps=None):
     if mode == 'restore':
         name, blob = 'CRESFW.BIN', data
     else:
-        adjust, cres = build(data, preset, fps)
+        adjust, cres = build(data, preset, fps, ntsc)
         name, blob = ('ADJUST.BIN', adjust) if mode == 'try' else ('CRESFW.BIN', cres)
     _clean_card(card)
     tmp = os.path.join(card, name + '.tmp')

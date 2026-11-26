@@ -141,9 +141,14 @@ def convert(src, dst, args):
         raise Failed(f'{fps:.2f} frames/s - this is not a both-fields recording (expected ~50, or ~60 for NTSC). '
                      f'Was ADJUST.BIN on the card, and was the DVR in D1 mode?')
     ntsc = h == 240
+    dvf = []                                              # extra decoder filter
     if not ntsc and fps > 55:
-        raise Failed(f'{fps:.2f} fields/s at {h} lines - an NTSC camera recorded with the PAL build (fields stretched '
-                     f'to {h} lines). Use the NTSC build of ADJUST.BIN.')
+        # NTSC camera on the PAL build: the DVR's scaler stretched each 240-line field to 288. That is a plain vertical
+        # resample, so squeeze it back and treat the clip as NTSC (a little softer than the NTSC build records).
+        print(f'  NTSC recording made with the PAL build ({fps:.2f} fields/s, fields stretched to {h} lines) - '
+              f'squeezing back to 240 lines. Build the firmware with "NTSC" next time for full sharpness.', flush=True)
+        h, ntsc = 240, True
+        dvf = ['-vf', f'scale={w}:240:flags=lanczos']
     use_wss = args.parity == 'wss' or (args.parity == 'auto' and not ntsc)
     dst = dst.replace('{fmt}', f'{2 * h}p{round(fps)}' if args.bob else f'{2 * h}i')
     fs = w * h * 2                                        # yuv422p field
@@ -182,7 +187,7 @@ def convert(src, dst, args):
 
     def wss_present(path, n=200):
         """True when the WSS line marks top fields in a believable way: on roughly every second field."""
-        r = subprocess.run(['ffmpeg', '-v', 'error', '-i', path, '-frames:v', str(n), '-f', 'rawvideo',
+        r = subprocess.run(['ffmpeg', '-v', 'error', '-i', path, '-frames:v', str(n), *dvf, '-f', 'rawvideo',
                             '-pix_fmt', 'yuv422p', '-'], capture_output=True)
         got = len(r.stdout) // fs
         if got < 20:
@@ -192,7 +197,7 @@ def convert(src, dst, args):
 
     def picture_parity(path):
         """Top (True) / bottom per field from the picture alone (no WSS); see the module docstring."""
-        dec = subprocess.Popen(['ffmpeg', '-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'gray', '-'],
+        dec = subprocess.Popen(['ffmpeg', '-v', 'error', '-i', path, *dvf, '-f', 'rawvideo', '-pix_fmt', 'gray', '-'],
                                stdout=subprocess.PIPE)
         cost, back, prev = np.zeros(2), [], None           # Viterbi over states 0 = top, 1 = bottom
         while True:
@@ -237,7 +242,7 @@ def convert(src, dst, args):
     parity = None if use_wss else picture_parity(src)
     tmp = tempfile.TemporaryDirectory()
     audio = avi_audio(src, tmp.name) or src
-    dec = subprocess.Popen(['ffmpeg', '-v', 'error', '-i', src, '-f', 'rawvideo', '-pix_fmt', 'yuv422p', '-'],
+    dec = subprocess.Popen(['ffmpeg', '-v', 'error', '-i', src, *dvf, '-f', 'rawvideo', '-pix_fmt', 'yuv422p', '-'],
                            stdout=subprocess.PIPE)
     enc = subprocess.Popen(['ffmpeg', '-v', 'error', '-y', '-f', 'rawvideo', '-pix_fmt', 'yuv422p', '-s', f'{W}x{H}',
                             '-r', rate, '-i', '-', '-i', audio, '-map', '0:v', '-map', '1:a?', '-vf', vf,
