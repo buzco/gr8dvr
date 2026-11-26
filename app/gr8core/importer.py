@@ -43,7 +43,13 @@ def import_clip(src, dst_dir, use_looks=True, overscan=True, keep_576i=False, lo
                 log(f'  {a:7.2f}s - {b:7.2f}s  preset {p} {looks.LOOKS[p][0]}')
         out = os.path.join(dst_dir, stem + ('_GR8DVR.mp4' if use_looks else '_original.mp4'))
         log(f'{name}: grading -> {os.path.basename(out)}')
-        graph = looks.filter_graph(segs, overscan, use_looks, pre='' if p50 else 'bwdif=mode=send_frame')
+        from .convert import probe
+        try:
+            lines = probe(mid).get('height') or 576
+        except Exception:                                    # noqa: BLE001
+            lines = 576
+        graph = looks.filter_graph(segs, overscan, use_looks, pre='' if p50 else 'bwdif=mode=send_frame',
+                                   lines=lines)
         from .convert import ROTATIONS
         vout = '[v]'
         if ROTATIONS.get(rotate):

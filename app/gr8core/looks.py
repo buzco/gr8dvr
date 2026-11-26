@@ -15,8 +15,16 @@ LOOKS = {
 }
 # Overscan crop (as a CRT hid it): drops the bottom lines where the DVR's encoder can overtake the capture,
 # the WSS dots on the top line and the side edges; keeps 4:3, square pixels.
+# PAL 576 lines -> 768x576, NTSC 480 lines -> 640x480 (both square-pixel 4:3).
 OVERSCAN = 'crop=660:540:30:4,scale=768:576:flags=lanczos,setsar=1'
 FULL = 'scale=768:576:flags=lanczos,setsar=1'
+OVERSCAN_NTSC = 'crop=660:450:30:3,scale=640:480:flags=lanczos,setsar=1'
+FULL_NTSC = 'scale=640:480:flags=lanczos,setsar=1'
+
+
+def out_size(lines):
+    """Output frame size for a woven picture of `lines` lines (576 PAL / 480 NTSC)."""
+    return (640, 480) if lines and lines <= 480 else (768, 576)
 
 
 def stamps(avi):
@@ -67,8 +75,10 @@ def fps_mode(st):
     return 1 if not st or sum(m for m, _ in st) * 2 >= len(st) else 0
 
 
-def filter_graph(segs, overscan=True, looks=True, pre=''):
-    base = (pre + ',' if pre else '') + (OVERSCAN if overscan else FULL)
+def filter_graph(segs, overscan=True, looks=True, pre='', lines=576):
+    ntsc = bool(lines) and lines <= 480
+    scale = (OVERSCAN_NTSC if ntsc else OVERSCAN) if overscan else (FULL_NTSC if ntsc else FULL)
+    base = (pre + ',' if pre else '') + scale
     if not looks:
         segs = [(0.0, None, 0)]
     fc, labels = [], []

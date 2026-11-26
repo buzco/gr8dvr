@@ -180,6 +180,16 @@ def convert(src, dst, args):
     def is_top(y):
         return np.abs(y[0, 16:w - 24].astype(np.int16) - y[1, 16:w - 24]).mean() > args.wss
 
+    def wss_present(path, n=200):
+        """True when the WSS line marks top fields in a believable way: on roughly every second field."""
+        r = subprocess.run(['ffmpeg', '-v', 'error', '-i', path, '-frames:v', str(n), '-f', 'rawvideo',
+                            '-pix_fmt', 'yuv422p', '-'], capture_output=True)
+        got = len(r.stdout) // fs
+        if got < 20:
+            return True
+        tops = sum(is_top(np.frombuffer(r.stdout[k * fs:k * fs + w * h], np.uint8).reshape(h, w)) for k in range(got))
+        return 0.3 <= tops / got <= 0.7
+
     def picture_parity(path):
         """Top (True) / bottom per field from the picture alone (no WSS); see the module docstring."""
         dec = subprocess.Popen(['ffmpeg', '-v', 'error', '-i', path, '-f', 'rawvideo', '-pix_fmt', 'gray', '-'],
@@ -219,6 +229,9 @@ def convert(src, dst, args):
         vf = f'setfield=tff,setsar={sar}' + ('' if args.prores else ',scale=interl=1,format=yuv420p')
         flags = ['-field_order', 'tt'] + ([] if args.prores else ['-flags', '+ilme+ildct', '-x264opts', 'tff=1'])
     print(f'{os.path.basename(src)} -> {dst}')
+    if use_wss and args.parity == 'auto' and not wss_present(src):
+        print('  no WSS line in this recording (normal for many camcorders) - using the picture method', flush=True)
+        use_wss = False
     if not use_wss:
         print('  finding the field order from the picture...', flush=True)
     parity = None if use_wss else picture_parity(src)
@@ -274,6 +287,9 @@ def convert(src, dst, args):
     print('\r', end='')
     if enc.returncode:
         raise Failed(f'ffmpeg could not write {dst} (see its message above; is the file open in a player, or the disk full?)')
+    if woven == 0:
+        raise Failed(f'no complete frames could be woven from {n} fields - the top and bottom half-pictures '
+                     f'could not be told apart. Please send this clip to Buzco support.')
     print(f'  done: {n} fields -> {woven} frames {W}x{H} '
           f'({f"{H}p{round(fps)} deinterlaced" if args.bob else "interlaced tff"}), {skipped} stray fields skipped')
 

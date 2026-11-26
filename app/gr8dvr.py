@@ -743,7 +743,8 @@ class ClipTab:
             used = sorted({p for _, p in st})
             if not st:
                 return '▶ Mini DVR'
-            mode = '50p' if looks.fps_mode(st) else '25p'
+            ntsc = (r.get('info') or {}).get('height') == 240
+            mode = ('60p' if ntsc else '50p') if looks.fps_mode(st) else ('30p' if ntsc else '25p')
             return f'▶ Mini DVR {mode}'
         if not i.get('video'):
             return 'audio'
@@ -831,9 +832,13 @@ class ClipTab:
                 st = r['stamps'] or []
                 segs = looks.segments([p for _, p in st]) if self.use_looks.get() else []
                 used = ', '.join(f'{p} {looks.LOOKS[p][0]}' for p in sorted({p for _, _, p in segs})) or 'none'
-                txt = (f"Mini DVR clip · weave both fields → {'50p smooth' if looks.fps_mode(st) else '25p cinematic'} "
+                ntsc = (r['info'] or {}).get('height') == 240
+                ow, oh = looks.out_size(480 if ntsc else 576)
+                sm, ci = ('60p', '30p') if ntsc else ('50p', '25p')
+                txt = (f"Mini DVR clip ({'NTSC' if ntsc else 'PAL'}) · weave both fields → "
+                       f"{sm + ' smooth' if looks.fps_mode(st) else ci + ' cinematic'} "
                        f"(as recorded) · {'TV-style edge crop' if self.overscan.get() else 'full frame'} → "
-                       f"768×576 4:3\nLooks: {used if self.use_looks.get() else 'off (original colours)'}"
+                       f"{ow}×{oh} 4:3\nLooks: {used if self.use_looks.get() else 'off (original colours)'}"
                        f"{' · ' + ROT_NAMES[r['rotate']] if r['rotate'] != '0°' else ''}\n"
                        f"H.264 CRF 16, AAC 192 kbit/s 48 kHz, MP4\nSaved as: {name}_"
                        f"{'GR8DVR' if self.use_looks.get() else 'original'}.mp4")
